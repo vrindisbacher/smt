@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Var<'a> {
+pub struct Lit<'a> {
     name: &'a str,
     negated: bool,
 }
 
-impl<'a> Var<'a> {
+impl<'a> Lit<'a> {
     pub fn new(name: &'a str) -> Self {
         Self {
             name,
@@ -32,17 +32,17 @@ impl<'a> Var<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Clause<'a> {
-    pub vars: Vec<Var<'a>>,
+    pub vars: Vec<Lit<'a>>,
 }
 
 impl<'a> Clause<'a> {
-    pub fn new(vars: Vec<Var<'a>>) -> Self {
+    pub fn new(vars: Vec<Lit<'a>>) -> Self {
         Self { vars }
     }
 
-    pub fn get_unit_var(&self, assignments: &HashMap<&'a str, bool>) -> Option<&Var<'a>> {
+    pub fn get_unit_var(&self, assignments: &HashMap<&'a str, bool>) -> Option<&Lit<'a>> {
         // exactly one unassigned variable in clause makes it a unit
-        let unassigned_vars: Vec<&Var<'a>> = self
+        let unassigned_vars: Vec<&Lit<'a>> = self
             .vars
             .iter()
             .flat_map(|var| {

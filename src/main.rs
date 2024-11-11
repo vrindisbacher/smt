@@ -1,16 +1,14 @@
-use std::collections::HashMap;
-
 use sat::{
-    defs::{Clause, Formula, Var},
+    defs::{Clause, Formula, Lit},
     dpll::Solver,
 };
 
 mod sat;
 
 fn main() {
-    let var1 = Var::new("a");
-    let var1_neg = Var::negated("a");
-    let var2 = Var::new("b");
+    let var1 = Lit::new("a");
+    let var1_neg = Lit::negated("a");
+    let var2 = Lit::new("b");
     let clause1 = Clause::new(vec![var1]);
     let clause2 = Clause::new(vec![var1_neg, var2]);
     let formula = Formula::new(vec![clause1, clause2]);

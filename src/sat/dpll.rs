@@ -96,14 +96,14 @@ impl<'a> Solver<'a> {
 
 #[cfg(test)]
 mod sat_test {
-    use crate::sat::defs::{Clause, Formula, Var};
+    use crate::sat::defs::{Clause, Formula, Lit};
 
     use super::Solver;
 
     #[test]
     fn unsat_simple() {
-        let var = Var::new("a");
-        let var_neg = Var::negated("a");
+        let var = Lit::new("a");
+        let var_neg = Lit::negated("a");
         let clause = Clause::new(vec![var]);
         let clause_neg = Clause::new(vec![var_neg]);
         let formula = Formula::new(vec![clause, clause_neg]);
@@ -112,7 +112,7 @@ mod sat_test {
 
     #[test]
     fn sat_single_var() {
-        let var = Var::new("a");
+        let var = Lit::new("a");
         let clause = Clause::new(vec![var]);
         let formula = Formula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
@@ -120,7 +120,7 @@ mod sat_test {
 
     #[test]
     fn sat_single_var_negated() {
-        let var = Var::negated("a");
+        let var = Lit::negated("a");
         let clause = Clause::new(vec![var]);
         let formula = Formula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
@@ -129,28 +129,28 @@ mod sat_test {
     #[test]
     fn sat_complex() {
         // (a ∨ ¬b ∨ c) ∧ (¬a ∨ b ∨ ¬d) ∧ (c ∨ d ∨ ¬e) ∧ (¬c ∨ ¬d ∨ e) ∧ (b ∨ ¬e ∨ ¬f) ∧ (¬b ∨ f ∨ a)
-        let a = Var::new("a");
-        let neg_b = Var::negated("b");
-        let c = Var::new("c");
+        let a = Lit::new("a");
+        let neg_b = Lit::negated("b");
+        let c = Lit::new("c");
         let clause1 = Clause::new(vec![a, neg_b, c]);
 
-        let neg_a = Var::negated("a");
-        let b = Var::new("b");
-        let neg_d = Var::negated("d");
+        let neg_a = Lit::negated("a");
+        let b = Lit::new("b");
+        let neg_d = Lit::negated("d");
         let clause2 = Clause::new(vec![neg_a, b, neg_d]);
 
-        let neg_e = Var::negated("e");
-        let d = Var::new("d");
+        let neg_e = Lit::negated("e");
+        let d = Lit::new("d");
         let clause3 = Clause::new(vec![c, d, neg_e]);
 
-        let e = Var::new("e");
-        let neg_c = Var::negated("c");
+        let e = Lit::new("e");
+        let neg_c = Lit::negated("c");
         let clause4 = Clause::new(vec![neg_c, neg_d, e]);
 
-        let neg_f = Var::negated("f");
+        let neg_f = Lit::negated("f");
         let clause5 = Clause::new(vec![b, neg_e, neg_f]);
 
-        let f = Var::new("a");
+        let f = Lit::new("a");
         let clause6 = Clause::new(vec![neg_b, f, a]);
 
         let formula = Formula::new(vec![clause1, clause2, clause3, clause4, clause5, clause6]);
@@ -160,16 +160,16 @@ mod sat_test {
     #[test]
     fn unsat_complex() {
         // (𝑥∨𝑦∨𝑧) ∧ (𝑥∨𝑦∨¬𝑧) ∧ (𝑥∨¬𝑦∨𝑧) ∧ (𝑥∨¬𝑦∨¬𝑧) ∧ (¬𝑥∨𝑦∨𝑧) ∧ (¬𝑥∨𝑦∨¬𝑧) ∧ (¬𝑥∨¬𝑦∨𝑧) ∧ (¬𝑥∨¬𝑦∨¬𝑧)
-        let x = Var::new("x");
-        let y = Var::new("y");
-        let z = Var::new("z");
+        let x = Lit::new("x");
+        let y = Lit::new("y");
+        let z = Lit::new("z");
         let clause1 = Clause::new(vec![x, y, z]);
-        let neg_z = Var::negated("z");
+        let neg_z = Lit::negated("z");
         let clause2 = Clause::new(vec![x, y, neg_z]);
-        let neg_y = Var::negated("y");
+        let neg_y = Lit::negated("y");
         let clause3 = Clause::new(vec![x, neg_y, z]);
         let clause4 = Clause::new(vec![x, neg_y, neg_z]);
-        let neg_x = Var::negated("x");
+        let neg_x = Lit::negated("x");
         let clause5 = Clause::new(vec![neg_x, y, z]);
         let clause6 = Clause::new(vec![neg_x, y, neg_z]);
         let clause7 = Clause::new(vec![neg_x, neg_y, z]);
