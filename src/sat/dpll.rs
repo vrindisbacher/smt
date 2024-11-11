@@ -127,6 +127,17 @@ mod sat_test {
     }
 
     #[test]
+    fn sat_neg_unit_prop() {
+        let var1 = Lit::new("a");
+        let var1_neg = Lit::negated("a");
+        let var2 = Lit::new("b");
+        let clause1 = Clause::new(vec![var1_neg]);
+        let clause2 = Clause::new(vec![var1, var2]);
+        let formula = Formula::new(vec![clause1, clause2]);
+        assert_eq!(Solver::new(formula).run(), true)
+    }
+
+    #[test]
     fn sat_complex() {
         // (a ∨ ¬b ∨ c) ∧ (¬a ∨ b ∨ ¬d) ∧ (c ∨ d ∨ ¬e) ∧ (¬c ∨ ¬d ∨ e) ∧ (b ∨ ¬e ∨ ¬f) ∧ (¬b ∨ f ∨ a)
         let a = Lit::new("a");
