@@ -3,7 +3,8 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use super::assignment::Assignments;
-use super::lit::Lit;
+use super::formula::Formula;
+use super::var::Lit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Clause<T: PartialEq + Eq + Hash + Debug + Clone> {
@@ -12,21 +13,14 @@ pub struct Clause<T: PartialEq + Eq + Hash + Debug + Clone> {
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
-    pub fn new(mut vars: Vec<Lit<T>>) -> Self {
+    pub fn new(vars: Vec<Lit<T>>) -> Self {
         let watchlist;
         if vars.len() >= 2 {
             watchlist = vec![0, 1];
         } else {
             watchlist = vec![0]
         }
-        let clause = Self {
-            vars: vars.clone(),
-            watchlist: watchlist.clone(),
-        };
-        for idx in watchlist.iter() {
-            vars[*idx].add_watched_by(clause.clone());
-        }
-        clause
+        Self { vars, watchlist }
     }
 
     pub fn is_watching_at_least_one_true(&self, assignment: &Assignments<T>) -> bool {
@@ -42,7 +36,8 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
 
     pub fn resolve_watch(
         &mut self,
-        lit_to_change: &mut Lit<T>,
+        formula: &mut Formula<T>,
+        lit_to_change: &Lit<T>,
         assignment: &mut Assignments<T>,
     ) -> Result<(), ()> {
         let to_change_idxs = self
@@ -64,7 +59,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
                     continue;
                 }
                 if let Some(assn) = assignment.get_assignment(var) {
-                    if !assn {
+                    if assn {
                         new_idx = idx as i32;
                     }
                 } else {
@@ -86,9 +81,8 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
                 }
             } else {
                 self.watchlist[to_change_wl_idx] = new_idx as usize;
-                lit_to_change.remove_watched_by(self);
-                let clause_to_add_watched = self.clone();
-                self.vars[new_idx as usize].add_watched_by(clause_to_add_watched);
+                formula.remove_watching_clause_for_var(lit_to_change.get_name(), self);
+                formula.add_watching_clause_for_var(self.vars[new_idx as usize].get_name(), self);
             }
             Ok(())
         } else {

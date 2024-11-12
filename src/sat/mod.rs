@@ -1,28 +1,26 @@
 mod assignment;
 pub mod clause;
-pub mod dimacs;
 pub mod formula;
-pub mod lit;
+pub mod var;
 
 use std::clone::Clone;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
 use assignment::Assignments;
 use formula::Formula;
-use lit::Lit;
+use var::{Lit, Var};
 
 #[derive(Debug, Clone)]
 pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
-    formula: Formula<T>,
     all_vars: Vec<Lit<T>>,
+    formula: Formula<T>,
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
     pub fn new(formula: Formula<T>) -> Self {
         let all_vars = Self::get_all_vars(&formula);
-        Self { formula, all_vars }
+        Self { all_vars, formula }
     }
 
     fn get_all_vars(formula: &Formula<T>) -> Vec<Lit<T>> {
@@ -46,33 +44,39 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
         true
     }
 
-    fn get_next_to_assign(&self, assignments: &Assignments<T>) -> Option<&Lit<T>> {
+    fn get_next_to_assign(&self, assignments: &Assignments<T>) -> Option<&Var<T>> {
         for var in self.all_vars.iter() {
             if assignments.get_assignment(&var).is_none() {
-                return Some(var);
+                return Some(var.get_var());
             }
         }
         None
     }
 
-    fn unit_prop<'a>(&'a self, assignments: &mut Assignments<T>) -> Result<(), ()> {
+    fn unit_prop(&mut self, assignments: &mut Assignments<T>) -> Result<(), ()> {
         while assignments.propogation_queue.len() > 0 {
             // SAFETY: len is > 0
-            let mut var = assignments.propogation_queue.pop_front().unwrap();
-            let mut cloned_var = var.clone();
-            let clauses = cloned_var.watching_clauses_mut();
-            for clause in clauses.iter_mut() {
-                if let Some(assn) = assignments.get_assignment(&var) {
-                    if assn {
-                        continue;
-                    }
-                }
-                if clause.is_watching_at_least_one_true(assignments) {
+            let var = assignments.propogation_queue.pop_front().unwrap();
+            if let Some(assn) = assignments.get_assignment(&var) {
+                // we have a valid assignment for the current variable so we're good
+                if assn {
                     continue;
                 }
-
-                // clause now watches all false we need to switch what we're watching
-                clause.resolve_watch(&mut var, assignments)?;
+            } else {
+                // can't cause a conflict because it's unassigned
+                continue;
+            }
+            // otherwise we need to look at watching clauses
+            // and make sure that we are watching at least one true
+            // variable
+            let clauses = self.formula.get_watching_clauses_for_var(var.get_name());
+            for mut clause in clauses {
+                if clause.is_watching_at_least_one_true(assignments) {
+                    // this assignment isn't valid but we are watching something with a valid
+                    // assignment
+                    continue;
+                }
+                clause.resolve_watch(&mut self.formula, &var, assignments)?;
             }
         }
         Ok(())
@@ -108,16 +112,20 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
 
 #[cfg(test)]
 mod sat_test {
+    use crate::dimacs::parse_formula_from_dimacs_str;
     use crate::sat::{
-        clause::Clause, dimacs::parse_formula_from_dimacs_str, formula::Formula, lit::Lit,
+        clause::Clause,
+        formula::Formula,
+        var::{Lit, Var},
     };
 
     use super::Solver;
 
     #[test]
     fn unsat_simple() {
-        let var = Lit::pos("a");
-        let var_neg = Lit::neg("a");
+        let var_a = Var::new("a");
+        let var = Lit::pos(var_a);
+        let var_neg = Lit::neg(var_a);
         let clause = Clause::new(vec![var]);
         let clause_neg = Clause::new(vec![var_neg]);
         let formula = Formula::new(vec![clause, clause_neg]);
@@ -126,7 +134,8 @@ mod sat_test {
 
     #[test]
     fn sat_single_var() {
-        let var = Lit::pos("a");
+        let var_a = Var::new("a");
+        let var = Lit::pos(var_a);
         let clause = Clause::new(vec![var]);
         let formula = Formula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
@@ -134,7 +143,8 @@ mod sat_test {
 
     #[test]
     fn sat_single_var_negated() {
-        let var = Lit::neg("a");
+        let var_a = Var::new("a");
+        let var = Lit::neg(var_a);
         let clause = Clause::new(vec![var]);
         let formula = Formula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
@@ -142,9 +152,11 @@ mod sat_test {
 
     #[test]
     fn sat_neg_unit_prop() {
-        let var1 = Lit::pos("a");
-        let var1_neg = Lit::neg("a");
-        let var2 = Lit::pos("b");
+        let var_a = Var::new("a");
+        let var1 = Lit::pos(var_a);
+        let var1_neg = Lit::neg(var_a);
+        let var_b = Var::new("b");
+        let var2 = Lit::pos(var_b);
         let clause1 = Clause::new(vec![var1_neg]);
         let clause2 = Clause::new(vec![var1, var2]);
         let formula = Formula::new(vec![clause1, clause2]);
@@ -154,28 +166,35 @@ mod sat_test {
     #[test]
     fn sat_complex() {
         // (a ∨ ¬b ∨ c) ∧ (¬a ∨ b ∨ ¬d) ∧ (c ∨ d ∨ ¬e) ∧ (¬c ∨ ¬d ∨ e) ∧ (b ∨ ¬e ∨ ¬f) ∧ (¬b ∨ f ∨ a)
-        let a = Lit::pos("a");
-        let neg_b = Lit::neg("b");
-        let c = Lit::pos("c");
-        let clause1 = Clause::new(vec![a.clone(), neg_b.clone(), c.clone()]);
+        let var_a = Var::new("a");
+        let var_b = Var::new("b");
+        let var_c = Var::new("c");
+        let var_d = Var::new("d");
+        let var_e = Var::new("e");
+        let var_f = Var::new("f");
 
-        let neg_a = Lit::neg("a");
-        let b = Lit::pos("b");
-        let neg_d = Lit::neg("d");
-        let clause2 = Clause::new(vec![neg_a, b.clone(), neg_d.clone()]);
+        let a = Lit::pos(var_a);
+        let neg_b = Lit::neg(var_b);
+        let c = Lit::pos(var_c);
+        let clause1 = Clause::new(vec![a, neg_b, c]);
 
-        let neg_e = Lit::neg("e");
-        let d = Lit::pos("d");
-        let clause3 = Clause::new(vec![c, d, neg_e.clone()]);
+        let neg_a = Lit::neg(var_a);
+        let b = Lit::pos(var_b);
+        let neg_d = Lit::neg(var_d);
+        let clause2 = Clause::new(vec![neg_a, b, neg_d]);
 
-        let e = Lit::pos("e");
-        let neg_c = Lit::neg("c");
+        let neg_e = Lit::neg(var_e);
+        let d = Lit::pos(var_d);
+        let clause3 = Clause::new(vec![c, d, neg_e]);
+
+        let e = Lit::pos(var_e);
+        let neg_c = Lit::neg(var_c);
         let clause4 = Clause::new(vec![neg_c, neg_d, e]);
 
-        let neg_f = Lit::neg("f");
+        let neg_f = Lit::neg(var_f);
         let clause5 = Clause::new(vec![b, neg_e, neg_f]);
 
-        let f = Lit::pos("a");
+        let f = Lit::pos(var_a);
         let clause6 = Clause::new(vec![neg_b, f, a]);
 
         let formula = Formula::new(vec![clause1, clause2, clause3, clause4, clause5, clause6]);
@@ -185,19 +204,22 @@ mod sat_test {
     #[test]
     fn unsat_complex() {
         // (𝑥∨𝑦∨𝑧) ∧ (𝑥∨𝑦∨¬𝑧) ∧ (𝑥∨¬𝑦∨𝑧) ∧ (𝑥∨¬𝑦∨¬𝑧) ∧ (¬𝑥∨𝑦∨𝑧) ∧ (¬𝑥∨𝑦∨¬𝑧) ∧ (¬𝑥∨¬𝑦∨𝑧) ∧ (¬𝑥∨¬𝑦∨¬𝑧)
-        let x = Lit::pos("x");
-        let y = Lit::pos("y");
-        let z = Lit::pos("z");
-        let clause1 = Clause::new(vec![x.clone(), y.clone(), z.clone()]);
-        let neg_z = Lit::neg("z");
-        let clause2 = Clause::new(vec![x.clone(), y.clone(), neg_z.clone()]);
-        let neg_y = Lit::neg("y");
-        let clause3 = Clause::new(vec![x.clone(), neg_y.clone(), z.clone()]);
-        let clause4 = Clause::new(vec![x, neg_y.clone(), neg_z.clone()]);
-        let neg_x = Lit::neg("x");
-        let clause5 = Clause::new(vec![neg_x.clone(), y.clone(), z.clone()]);
-        let clause6 = Clause::new(vec![neg_x.clone(), y, neg_z.clone()]);
-        let clause7 = Clause::new(vec![neg_x.clone(), neg_y.clone(), z]);
+        let var_x = Var::new("x");
+        let var_y = Var::new("z");
+        let var_z = Var::new("z");
+        let x = Lit::pos(var_x);
+        let y = Lit::pos(var_y);
+        let z = Lit::pos(var_z);
+        let clause1 = Clause::new(vec![x, y, z]);
+        let neg_z = Lit::neg(var_z);
+        let clause2 = Clause::new(vec![x, y, neg_z]);
+        let neg_y = Lit::neg(var_y);
+        let clause3 = Clause::new(vec![x, neg_y, z]);
+        let clause4 = Clause::new(vec![x, neg_y, neg_z]);
+        let neg_x = Lit::neg(var_x);
+        let clause5 = Clause::new(vec![neg_x, y, z]);
+        let clause6 = Clause::new(vec![neg_x, y, neg_z]);
+        let clause7 = Clause::new(vec![neg_x, neg_y, z]);
         let clause8 = Clause::new(vec![neg_x, neg_y, neg_z]);
         let formula = Formula::new(vec![
             clause1, clause2, clause3, clause4, clause5, clause6, clause7, clause8,
