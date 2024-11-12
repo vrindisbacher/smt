@@ -1,4 +1,4 @@
-use super::{clause::Clause, formula::Formula, lit::Lit};
+use crate::sat::{clause::Clause, formula::Formula, lit::Lit};
 
 pub fn parse_formula_from_dimacs_str(lines: &str) -> Formula<i32> {
     let mut clauses = Vec::new();

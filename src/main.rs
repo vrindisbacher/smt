@@ -1,7 +1,7 @@
-use sat::{
-    defs::{Clause, Formula, Lit}, dimacs::parse_formula_from_dimacs_str, dpll::Solver
-};
+use dimacs::parse_formula_from_dimacs_str;
+use sat::Solver;
 
+mod dimacs;
 mod sat;
 
 fn main() {
@@ -180,12 +180,4 @@ fn main() {
         ";
     let formula = parse_formula_from_dimacs_str(str);
     assert_eq!(Solver::new(formula).run(), false);
-    // let var1 = Lit::pos("a");
-    // let var1_neg = Lit::neg("a");
-    // let var2 = Lit::pos("b");
-    // let clause1 = Clause::new(vec![var1]);
-    // let clause2 = Clause::new(vec![var1_neg, var2]);
-    // let formula = Formula::new(vec![clause1, clause2]);
-    // let res = Solver::new(formula).run();
-    // println!("{res:?}");
 }
