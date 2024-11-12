@@ -1,4 +1,8 @@
-use super::defs::{Clause, Formula, Lit};
+use crate::sat::{
+    clause::Clause,
+    formula::Formula,
+    var::{Lit, Var},
+};
 
 pub fn parse_formula_from_dimacs_str(lines: &str) -> Formula<i32> {
     let mut clauses = Vec::new();
@@ -24,9 +28,9 @@ pub fn parse_formula_from_dimacs_str(lines: &str) -> Formula<i32> {
                 // Check if the variable is negated
                 if num < 0 {
                     // the literal must have the same name as any positive instances
-                    collector.push(Lit::neg(num.abs()));
+                    collector.push(Lit::neg(Var::new(-num)));
                 } else {
-                    collector.push(Lit::pos(num));
+                    collector.push(Lit::pos(Var::new(num)));
                 }
             }
         }
