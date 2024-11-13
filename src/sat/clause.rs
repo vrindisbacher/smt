@@ -35,7 +35,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
     }
 
     pub fn resolve_watch(
-        &mut self,
+        &self,
         formula: &mut Formula<T>,
         lit_to_change: &Lit<T>,
         assignment: &mut Assignments<T>,
@@ -80,9 +80,10 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
                     return Err(());
                 }
             } else {
-                self.watchlist[to_change_wl_idx] = new_idx as usize;
-                formula.remove_watching_clause_for_var(lit_to_change.get_name(), self);
-                formula.add_watching_clause_for_var(self.vars[new_idx as usize].get_name(), self);
+                // updates done to main formula clauses - at this point these are cloned
+                formula.update_clause_watchlist(self, to_change_wl_idx, new_idx as usize);
+                formula.remove_watching_clause_for_var(lit_to_change, self);
+                formula.add_watching_clause_for_var(&self.vars[new_idx as usize], self);
             }
             Ok(())
         } else {

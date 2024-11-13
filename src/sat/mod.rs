@@ -56,40 +56,66 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
     fn unit_prop(&mut self, assignments: &mut Assignments<T>) -> Result<(), ()> {
         while assignments.propogation_queue.len() > 0 {
             // SAFETY: len is > 0
+
+            // var has the negation of a freshly assigned variable
             let var = assignments.propogation_queue.pop_front().unwrap();
-            if let Some(assn) = assignments.get_assignment(&var) {
-                // we have a valid assignment for the current variable so we're good
-                if assn {
+            log::debug!("Looking at {var:?} in propogation queue");
+            // Get all clauses that relate to the clause
+            // If the negated assignment causes a conflict, we need to
+            // resolve
+            let clauses = self.formula.get_watching_clauses_for_var(&var);
+            log::debug!(
+                "Watched clauses before {:?}",
+                self.formula.get_watching_clauses_for_var(&var)
+            );
+            for clause in clauses {
+                log::debug!("Looking at watching clause {clause:?}");
+                if let Some(assn) = assignments.get_assignment(&var) {
+                    // we have a valid assignment for the current variable so we're good
+                    if assn {
+                        log::debug!("Valid assignment for var {var:?}. Continuing.");
+                        continue;
+                    }
+                } else {
+                    // can't cause a conflict because it's unassigned
+                    log::debug!("Found an unassigned variable in clause. Continuing");
                     continue;
                 }
-            } else {
-                // can't cause a conflict because it's unassigned
-                continue;
-            }
-            // otherwise we need to look at watching clauses
-            // and make sure that we are watching at least one true
-            // variable
-            let clauses = self.formula.get_watching_clauses_for_var(var.get_name());
-            for mut clause in clauses {
+
                 if clause.is_watching_at_least_one_true(assignments) {
+                    log::debug!("Found at least one true var in clause. continuing");
                     // this assignment isn't valid but we are watching something with a valid
                     // assignment
                     continue;
                 }
+
+                log::debug!("Resolving watched lits for clause");
                 clause.resolve_watch(&mut self.formula, &var, assignments)?;
+                log::debug!("Resolved watched lits for clause. Clause is now {clause:?}");
             }
+            log::debug!(
+                "Watched clauses after {:?}",
+                self.formula.get_watching_clauses_for_var(&var)
+            );
         }
+        log::debug!("Successfully completed unit propogation");
         Ok(())
     }
 
     fn dpll(&mut self, assignments: &mut Assignments<T>) -> bool {
         while !self.all_assigned(assignments) {
+            log::debug!("In DPLL Loop with some unassigned");
             if self.unit_prop(assignments).is_err() {
+                log::debug!("Unit Propogation returned an error. Failing.");
                 return false;
             }
             // SAFETY: Check that all aren't assigned at the beginning
             let to_assign = self.get_next_to_assign(assignments).unwrap();
             assignments.create_decision_level(to_assign, true);
+            log::debug!(
+                "Created new decision level with {:?} assigned true",
+                to_assign.get_name()
+            );
 
             while self.unit_prop(assignments).is_err() {
                 if assignments.assignments_stack.len() <= 1 {
@@ -97,8 +123,18 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
                 }
                 // SAFETY: We just checked that there's at least one element
                 let (conflicting_var, conflict_assn) = assignments.backtrack();
+                log::debug!(
+                    "Conflicting var {:?} found. It was assigned {}",
+                    conflicting_var.get_name(),
+                    conflict_assn
+                );
                 let flipped_assn = !conflict_assn;
                 assignments.assign(conflicting_var.get_name().clone(), flipped_assn);
+                log::debug!(
+                    "Assigned var {:?} {}",
+                    conflicting_var.get_name(),
+                    flipped_assn
+                );
             }
         }
         true
@@ -248,9 +284,6 @@ mod sat_test {
             -1 5 3 4 0
             -3 -4 0
         ";
-        // 1 = true
-        // 5 = true
-        // 4 = false
         let formula = parse_formula_from_dimacs_str(str);
         assert_eq!(Solver::new(formula).run(), true);
     }
