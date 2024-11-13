@@ -1,4 +1,6 @@
+use super::assignment;
 use super::clause::Clause;
+use super::var::Lit;
 
 use std::clone::Clone;
 use std::collections::HashMap;
@@ -8,8 +10,8 @@ use std::hash::Hash;
 #[derive(Debug, Clone)]
 pub struct Formula<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub clauses: Vec<Clause<T>>,
-    // var name to index of clauses in formula...
-    pub watched_by_map: HashMap<T, Vec<usize>>,
+    // var name and negation to index of clauses in formula...
+    pub watched_by_map: HashMap<(T, bool), Vec<usize>>,
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Formula<T> {
@@ -22,12 +24,14 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Formula<T> {
         }
     }
 
-    fn create_watchlist_map(clauses: &Vec<Clause<T>>) -> HashMap<T, Vec<usize>> {
+    fn create_watchlist_map(clauses: &Vec<Clause<T>>) -> HashMap<(T, bool), Vec<usize>> {
         let mut map = HashMap::new();
         for (idx, clause) in clauses.iter().enumerate() {
             for watch_idx in clause.watchlist.iter() {
-                let var_name = clause.vars[*watch_idx].get_name().clone();
-                map.entry(var_name)
+                let var = &clause.vars[*watch_idx];
+                let var_name = var.get_name().clone();
+                let var_negated = var.is_negated();
+                map.entry((var_name, var_negated))
                     .and_modify(|e: &mut Vec<usize>| {
                         if !e.contains(&idx) {
                             e.push(idx)
@@ -39,32 +43,52 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Formula<T> {
         map
     }
 
-    pub fn remove_watching_clause_for_var(&mut self, var_name: &T, clause: &Clause<T>) {
-        self.watched_by_map.entry(var_name.clone()).and_modify(|e| {
-            if let Some(idx) = e.iter().position(|i| self.clauses[*i] == *clause) {
-                e.remove(idx);
-            }
-        });
-    }
-
-    pub fn add_watching_clause_for_var(&mut self, var_name: &T, clause: &Clause<T>) {
-        if let Some(clause_idx) = self.clauses.iter().position(|c| c == clause) {
-            self.watched_by_map.entry(var_name.clone()).and_modify(|e| {
-                if !e.contains(&clause_idx) {
-                    e.push(clause_idx);
+    pub fn remove_watching_clause_for_var(&mut self, lit: &Lit<T>, clause: &Clause<T>) {
+        self.watched_by_map
+            .entry((lit.get_name().clone(), lit.is_negated()))
+            .and_modify(|e| {
+                if let Some(idx) = e.iter().position(|i| self.clauses[*i].vars == *clause.vars) {
+                    e.remove(idx);
                 }
             });
+    }
+
+    pub fn add_watching_clause_for_var(&mut self, lit: &Lit<T>, clause: &Clause<T>) {
+        if let Some(clause_idx) = self.clauses.iter().position(|c| c.vars == clause.vars) {
+            self.watched_by_map
+                .entry((lit.get_name().clone(), lit.is_negated()))
+                .and_modify(|e| {
+                    if !e.contains(&clause_idx) {
+                        e.push(clause_idx);
+                    }
+                });
         }
     }
 
-    pub fn get_watching_clauses_for_var(&self, var_name: &T) -> Vec<Clause<T>> {
+    pub fn get_watching_clauses_for_var(&self, lit: &Lit<T>) -> Vec<Clause<T>> {
         let mut vec = vec![];
-        if let Some(clause_idxs) = self.watched_by_map.get(var_name) {
+        if let Some(clause_idxs) = self
+            .watched_by_map
+            .get(&(lit.get_name().clone(), lit.is_negated()))
+        {
             for idx in clause_idxs {
                 let clause = self.clauses[*idx].clone();
                 vec.push(clause);
             }
         }
         vec
+    }
+
+    pub fn update_clause_watchlist(
+        &mut self,
+        clause: &Clause<T>,
+        to_change_wl_idx: usize,
+        new_idx: usize,
+    ) {
+        if let Some(clause_to_update_idx) =
+            self.clauses.iter_mut().position(|c| c.vars == clause.vars)
+        {
+            self.clauses[clause_to_update_idx].watchlist[to_change_wl_idx] = new_idx;
+        }
     }
 }
