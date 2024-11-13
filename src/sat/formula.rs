@@ -1,4 +1,3 @@
-use super::assignment;
 use super::clause::Clause;
 use super::var::Lit;
 
