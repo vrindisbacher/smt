@@ -2,17 +2,22 @@ mod assignment;
 pub mod clause;
 pub mod formula;
 
-use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::{clone::Clone, collections::HashMap};
 
 use crate::var::{IntoCnf, Lit, Var};
 use assignment::Assignments;
+use clause::CnfClause;
 use formula::CnfFormula;
 
 #[derive(Debug, Clone)]
 pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
     all_vars: Vec<Lit<T>>,
+    // lit to vec of clause idxs that contain it
+    lit_to_related_clause_map: HashMap<(T, bool), Vec<usize>>,
+    // clause idx to lits it's watching
+    clause_to_watched_lit_map: HashMap<usize, Vec<usize>>,
     formula: CnfFormula<T>,
 }
 
@@ -21,7 +26,193 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
     pub fn new(formula: impl IntoCnf<T>) -> Self {
         let formula = formula.into_cnf();
         let all_vars = Self::get_all_vars(&formula);
-        Self { all_vars, formula }
+        let clause_to_watched_lit_map = Self::create_clause_to_watched_lit_map(&formula.clauses);
+        let lit_to_related_clause_map =
+            Self::create_lit_to_related_clause_map(&formula.clauses, &clause_to_watched_lit_map);
+        Self {
+            all_vars,
+            formula,
+            clause_to_watched_lit_map,
+            lit_to_related_clause_map,
+        }
+    }
+
+    fn create_clause_to_watched_lit_map(clauses: &Vec<CnfClause<T>>) -> HashMap<usize, Vec<usize>> {
+        let mut map = HashMap::new();
+        for (idx, clause) in clauses.iter().enumerate() {
+            let watchlist;
+            if clause.vars.len() >= 2 {
+                watchlist = vec![0, 1];
+            } else {
+                watchlist = vec![0]
+            }
+            map.insert(idx, watchlist);
+        }
+        map
+    }
+
+    fn create_lit_to_related_clause_map(
+        clauses: &Vec<CnfClause<T>>,
+        watchlist_map: &HashMap<usize, Vec<usize>>,
+    ) -> HashMap<(T, bool), Vec<usize>> {
+        let mut map = HashMap::new();
+        for (idx, clause) in clauses.iter().enumerate() {
+            let watchlist = watchlist_map.get(&idx).expect(
+                "Something has gone terribly wrong - clause idx {idx} was not in watchlist map",
+            );
+            for watch_idx in watchlist.iter() {
+                let var = &clause.vars[*watch_idx];
+                let var_name = var.get_name().clone();
+                let var_negated = var.is_negated();
+                map.entry((var_name, var_negated))
+                    .and_modify(|e: &mut Vec<usize>| {
+                        if !e.contains(&idx) {
+                            e.push(idx)
+                        }
+                    })
+                    .or_insert_with(|| vec![idx]);
+            }
+        }
+        map
+    }
+
+    fn remove_watching_clause_for_var(&mut self, lit: &Lit<T>, clause_idx: usize) {
+        self.lit_to_related_clause_map
+            .entry((lit.get_name().clone(), lit.is_negated()))
+            .and_modify(|e| {
+                if let Some(idx) = e.iter().position(|i| *i == clause_idx) {
+                    e.remove(idx);
+                }
+            });
+    }
+
+    fn add_watching_clause_for_var(&mut self, name: T, negated: bool, clause_idx: usize) {
+        self.lit_to_related_clause_map
+            .entry((name, negated))
+            .and_modify(|e| {
+                if !e.contains(&clause_idx) {
+                    e.push(clause_idx);
+                }
+            });
+    }
+
+    fn resolve_watch(
+        &mut self,
+        clause_idx: usize,
+        lit_to_change: &Lit<T>,
+        assignment: &mut Assignments<T>,
+    ) -> Result<(), ()> {
+        // watchlist is a vec of var idxs in the given clause
+        let watchlist = self.clause_to_watched_lit_map.get(&clause_idx).expect(
+            "Something has gone terribly wrong - clause idx {idx} was not in watchlist map",
+        );
+        // let clause = self.formula.clauses[clause_idx].clone();
+        let to_change_idxs = watchlist
+            .iter()
+            .enumerate()
+            .find(|(_, idx)| self.formula.clauses[clause_idx].vars[**idx] == *lit_to_change);
+        if let Some((to_change_wl_idx, idx_to_change)) = to_change_idxs {
+            // now determine is we're looking at 2 vars or 1
+            let mut other_idx = None;
+            if watchlist.len() == 2 {
+                other_idx = Some(watchlist[1 - to_change_wl_idx]);
+            }
+            let mut new_idx = -1;
+            for (idx, var) in self.formula.clauses[clause_idx].vars.iter().enumerate() {
+                if idx == *idx_to_change
+                    || other_idx.is_some_and(|other_idx: usize| other_idx == idx)
+                {
+                    continue;
+                }
+                if let Some(assn) = assignment.get_assignment(var) {
+                    log::debug!("Found {var:?} which is assigned true");
+                    if assn {
+                        log::debug!("It is assigned true");
+                        new_idx = idx as i32;
+                    }
+                } else {
+                    log::debug!("Found {var:?} which is unassigned");
+                    new_idx = idx as i32;
+                }
+            }
+            if new_idx == -1 {
+                if let Some(other_idx) = other_idx {
+                    let other_watched = &self.formula.clauses[clause_idx].vars[other_idx];
+                    if let Some(assn) = assignment.get_assignment(other_watched) {
+                        log::debug!("Other watched idx is assigned");
+                        if !assn {
+                            return Err(());
+                        }
+                    }
+                    let assn_val = !other_watched.is_negated();
+                    assignment.assign(other_watched.get_name().clone(), assn_val);
+                } else {
+                    return Err(());
+                }
+            } else {
+                // update the vars the clause is looking at
+                self.update_clause_watchlist(clause_idx, to_change_wl_idx, new_idx as usize);
+                // remove the clause from the lit
+                self.remove_watching_clause_for_var(lit_to_change, clause_idx);
+                let var = &self.formula.clauses[clause_idx].vars[new_idx as usize];
+                let is_negated = var.is_negated();
+                let name = var.get_name().clone();
+                self.add_watching_clause_for_var(name, is_negated, clause_idx);
+            }
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn clause_watching_true(&self, clause_idx: usize, assignment: &Assignments<T>) -> bool {
+        // get the list of idxs for lits in the clause we are looking at
+        let watchlist = self.clause_to_watched_lit_map.get(&clause_idx).expect(
+            "Something has gone terribly wrong - clause idx {idx} was not in watchlist map",
+        );
+        for idx in watchlist.iter() {
+            if let Some(assn) =
+                assignment.get_assignment(&self.formula.clauses[clause_idx].vars[*idx])
+            {
+                if assn {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn get_watching_clauses_for_var(&self, lit: &Lit<T>) -> Option<Vec<usize>> {
+        Some(
+            self.lit_to_related_clause_map
+                .get(&(lit.get_name().clone(), lit.is_negated()))?
+                .clone(),
+        )
+    }
+
+    fn update_clause_watchlist(
+        &mut self,
+        clause_idx: usize,
+        to_change_wl_idx: usize,
+        new_idx: usize,
+    ) {
+        log::debug!(
+            "Updating watchlist for {:?} from {:?}",
+            self.formula.clauses[clause_idx],
+            self.clause_to_watched_lit_map.get(&clause_idx)
+        );
+        self.clause_to_watched_lit_map
+            .entry(clause_idx)
+            // set the new wl lit being watched to new idx
+            .and_modify(|w| {
+                log::debug!("Making modification to wl {w:?}");
+                w[to_change_wl_idx] = new_idx
+            });
+        log::debug!(
+            "Updated watchlist for {:?} to {:?}",
+            self.formula.clauses[clause_idx],
+            self.clause_to_watched_lit_map.get(&clause_idx)
+        );
     }
 
     fn get_all_vars(formula: &CnfFormula<T>) -> Vec<Lit<T>> {
@@ -56,21 +247,22 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
 
     fn unit_prop(&mut self, assignments: &mut Assignments<T>) -> Result<(), ()> {
         while assignments.propogation_queue.len() > 0 {
-            // SAFETY: len is > 0
-
             // var has the negation of a freshly assigned variable
+            // SAFETY: len is > 0
             let var = assignments.propogation_queue.pop_front().unwrap();
             log::debug!("Looking at {var:?} in propogation queue");
             // Get all clauses that relate to the clause
             // If the negated assignment causes a conflict, we need to
             // resolve
-            let clauses = self.formula.get_watching_clauses_for_var(&var);
-            log::debug!(
-                "Watched clauses before {:?}",
-                self.formula.get_watching_clauses_for_var(&var)
-            );
-            for clause in clauses {
-                log::debug!("Looking at watching clause {clause:?}");
+            let clause_idxs = match self.get_watching_clauses_for_var(&var) {
+                None => continue,
+                Some(idxs) => idxs,
+            };
+            for clause_idx in clause_idxs {
+                log::debug!(
+                    "Looking at watching clause {:?}",
+                    self.formula.clauses[clause_idx]
+                );
                 if let Some(assn) = assignments.get_assignment(&var) {
                     // we have a valid assignment for the current variable so we're good
                     if assn {
@@ -83,21 +275,23 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
                     continue;
                 }
 
-                if clause.is_watching_at_least_one_true(assignments) {
+                if self.clause_watching_true(clause_idx, assignments) {
                     log::debug!("Found at least one true var in clause. continuing");
                     // this assignment isn't valid but we are watching something with a valid
                     // assignment
                     continue;
                 }
 
-                log::debug!("Resolving watched lits for clause");
-                clause.resolve_watch(&mut self.formula, &var, assignments)?;
-                log::debug!("Resolved watched lits for clause. Clause is now {clause:?}");
+                log::debug!(
+                    "Resolving watched lits for clause. Here is the clauses watchlist {:?}",
+                    self.clause_to_watched_lit_map.get(&clause_idx).unwrap()
+                );
+                self.resolve_watch(clause_idx, &var, assignments)?;
+                log::debug!(
+                    "Successfully resolved watchlist. Here is the clauses new watchlist {:?}",
+                    self.clause_to_watched_lit_map.get(&clause_idx).unwrap()
+                );
             }
-            log::debug!(
-                "Watched clauses after {:?}",
-                self.formula.get_watching_clauses_for_var(&var)
-            );
         }
         log::debug!("Successfully completed unit propogation");
         Ok(())
