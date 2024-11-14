@@ -16,6 +16,7 @@ pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
     formula: CnfFormula<T>,
 }
 
+#[allow(private_bounds)]
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
     pub fn new(formula: impl IntoCnf<T>) -> Self {
         let formula = formula.into_cnf();

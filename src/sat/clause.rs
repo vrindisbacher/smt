@@ -7,7 +7,7 @@ use super::formula::CnfFormula;
 use crate::var::Lit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CnfClause<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub(crate) struct CnfClause<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub vars: Vec<Lit<T>>,
     pub watchlist: Vec<usize>,
 }
@@ -23,7 +23,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> CnfClause<T> {
         Self { vars, watchlist }
     }
 
-    pub(crate) fn is_watching_at_least_one_true(&self, assignment: &Assignments<T>) -> bool {
+    pub fn is_watching_at_least_one_true(&self, assignment: &Assignments<T>) -> bool {
         for idx in self.watchlist.iter() {
             if let Some(assn) = assignment.get_assignment(&self.vars[*idx]) {
                 if assn {
@@ -34,7 +34,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> CnfClause<T> {
         false
     }
 
-    pub(crate) fn resolve_watch(
+    pub fn resolve_watch(
         &self,
         formula: &mut CnfFormula<T>,
         lit_to_change: &Lit<T>,

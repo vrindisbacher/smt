@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Clone)]
-pub struct CnfFormula<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub(crate) struct CnfFormula<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub clauses: Vec<CnfClause<T>>,
     // var name and negation to index of clauses in formula...
     pub watched_by_map: HashMap<(T, bool), Vec<usize>>,

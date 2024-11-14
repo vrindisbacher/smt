@@ -6,7 +6,7 @@ use std::hash::Hash;
 use crate::var::{Lit, Var};
 
 #[derive(Debug)]
-pub struct Assignments<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub(crate) struct Assignments<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub assignments_stack: Vec<(HashMap<T, bool>, Option<Var<T>>)>,
     pub propogation_queue: VecDeque<Lit<T>>,
 }

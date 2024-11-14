@@ -24,7 +24,7 @@ pub trait IntoProp<T: PartialEq + Eq + Hash + Debug + Clone> {
     fn into_prop(self) -> Prop<T>;
 }
 
-pub trait IntoCnf<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub(crate) trait IntoCnf<T: PartialEq + Eq + Hash + Debug + Clone> {
     fn into_cnf(self) -> CnfFormula<T>;
 }
 
@@ -176,7 +176,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
         }
     }
 
-    pub fn into_cnf(self) -> CnfFormula<T> {
+    pub(crate) fn into_cnf(self) -> CnfFormula<T> {
         // TODO(VR): Use this later
         //
         // turn all implications into not, or, and
