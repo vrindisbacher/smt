@@ -1,29 +1,28 @@
 mod assignment;
 pub mod clause;
 pub mod formula;
-pub mod var;
 
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+use crate::var::{Lit, Var};
 use assignment::Assignments;
-use formula::Formula;
-use var::{Lit, Var};
+use formula::CnfFormula;
 
 #[derive(Debug, Clone)]
 pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
     all_vars: Vec<Lit<T>>,
-    formula: Formula<T>,
+    formula: CnfFormula<T>,
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
-    pub fn new(formula: Formula<T>) -> Self {
+    pub fn new(formula: CnfFormula<T>) -> Self {
         let all_vars = Self::get_all_vars(&formula);
         Self { all_vars, formula }
     }
 
-    fn get_all_vars(formula: &Formula<T>) -> Vec<Lit<T>> {
+    fn get_all_vars(formula: &CnfFormula<T>) -> Vec<Lit<T>> {
         let mut vars = vec![];
         for clause in formula.clauses.iter() {
             for var in clause.vars.iter() {
@@ -149,11 +148,8 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
 #[cfg(test)]
 mod sat_test {
     use crate::dimacs::parse_formula_from_dimacs_str;
-    use crate::sat::{
-        clause::Clause,
-        formula::Formula,
-        var::{Lit, Var},
-    };
+    use crate::sat::{clause::CnfClause, formula::CnfFormula};
+    use crate::var::{Lit, Var};
 
     use super::Solver;
 
@@ -162,9 +158,9 @@ mod sat_test {
         let var_a = Var::new("a");
         let var = Lit::pos(var_a);
         let var_neg = Lit::neg(var_a);
-        let clause = Clause::new(vec![var]);
-        let clause_neg = Clause::new(vec![var_neg]);
-        let formula = Formula::new(vec![clause, clause_neg]);
+        let clause = CnfClause::new(vec![var]);
+        let clause_neg = CnfClause::new(vec![var_neg]);
+        let formula = CnfFormula::new(vec![clause, clause_neg]);
         assert_eq!(Solver::new(formula).run(), false)
     }
 
@@ -172,8 +168,8 @@ mod sat_test {
     fn sat_single_var() {
         let var_a = Var::new("a");
         let var = Lit::pos(var_a);
-        let clause = Clause::new(vec![var]);
-        let formula = Formula::new(vec![clause]);
+        let clause = CnfClause::new(vec![var]);
+        let formula = CnfFormula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
     }
 
@@ -181,8 +177,8 @@ mod sat_test {
     fn sat_single_var_negated() {
         let var_a = Var::new("a");
         let var = Lit::neg(var_a);
-        let clause = Clause::new(vec![var]);
-        let formula = Formula::new(vec![clause]);
+        let clause = CnfClause::new(vec![var]);
+        let formula = CnfFormula::new(vec![clause]);
         assert_eq!(Solver::new(formula).run(), true)
     }
 
@@ -193,9 +189,9 @@ mod sat_test {
         let var1_neg = Lit::neg(var_a);
         let var_b = Var::new("b");
         let var2 = Lit::pos(var_b);
-        let clause1 = Clause::new(vec![var1_neg]);
-        let clause2 = Clause::new(vec![var1, var2]);
-        let formula = Formula::new(vec![clause1, clause2]);
+        let clause1 = CnfClause::new(vec![var1_neg]);
+        let clause2 = CnfClause::new(vec![var1, var2]);
+        let formula = CnfFormula::new(vec![clause1, clause2]);
         assert_eq!(Solver::new(formula).run(), true)
     }
 
@@ -212,28 +208,28 @@ mod sat_test {
         let a = Lit::pos(var_a);
         let neg_b = Lit::neg(var_b);
         let c = Lit::pos(var_c);
-        let clause1 = Clause::new(vec![a, neg_b, c]);
+        let clause1 = CnfClause::new(vec![a, neg_b, c]);
 
         let neg_a = Lit::neg(var_a);
         let b = Lit::pos(var_b);
         let neg_d = Lit::neg(var_d);
-        let clause2 = Clause::new(vec![neg_a, b, neg_d]);
+        let clause2 = CnfClause::new(vec![neg_a, b, neg_d]);
 
         let neg_e = Lit::neg(var_e);
         let d = Lit::pos(var_d);
-        let clause3 = Clause::new(vec![c, d, neg_e]);
+        let clause3 = CnfClause::new(vec![c, d, neg_e]);
 
         let e = Lit::pos(var_e);
         let neg_c = Lit::neg(var_c);
-        let clause4 = Clause::new(vec![neg_c, neg_d, e]);
+        let clause4 = CnfClause::new(vec![neg_c, neg_d, e]);
 
         let neg_f = Lit::neg(var_f);
-        let clause5 = Clause::new(vec![b, neg_e, neg_f]);
+        let clause5 = CnfClause::new(vec![b, neg_e, neg_f]);
 
         let f = Lit::pos(var_a);
-        let clause6 = Clause::new(vec![neg_b, f, a]);
+        let clause6 = CnfClause::new(vec![neg_b, f, a]);
 
-        let formula = Formula::new(vec![clause1, clause2, clause3, clause4, clause5, clause6]);
+        let formula = CnfFormula::new(vec![clause1, clause2, clause3, clause4, clause5, clause6]);
         assert_eq!(Solver::new(formula).run(), true);
     }
 
@@ -246,18 +242,18 @@ mod sat_test {
         let x = Lit::pos(var_x);
         let y = Lit::pos(var_y);
         let z = Lit::pos(var_z);
-        let clause1 = Clause::new(vec![x, y, z]);
+        let clause1 = CnfClause::new(vec![x, y, z]);
         let neg_z = Lit::neg(var_z);
-        let clause2 = Clause::new(vec![x, y, neg_z]);
+        let clause2 = CnfClause::new(vec![x, y, neg_z]);
         let neg_y = Lit::neg(var_y);
-        let clause3 = Clause::new(vec![x, neg_y, z]);
-        let clause4 = Clause::new(vec![x, neg_y, neg_z]);
+        let clause3 = CnfClause::new(vec![x, neg_y, z]);
+        let clause4 = CnfClause::new(vec![x, neg_y, neg_z]);
         let neg_x = Lit::neg(var_x);
-        let clause5 = Clause::new(vec![neg_x, y, z]);
-        let clause6 = Clause::new(vec![neg_x, y, neg_z]);
-        let clause7 = Clause::new(vec![neg_x, neg_y, z]);
-        let clause8 = Clause::new(vec![neg_x, neg_y, neg_z]);
-        let formula = Formula::new(vec![
+        let clause5 = CnfClause::new(vec![neg_x, y, z]);
+        let clause6 = CnfClause::new(vec![neg_x, y, neg_z]);
+        let clause7 = CnfClause::new(vec![neg_x, neg_y, z]);
+        let clause8 = CnfClause::new(vec![neg_x, neg_y, neg_z]);
+        let formula = CnfFormula::new(vec![
             clause1, clause2, clause3, clause4, clause5, clause6, clause7, clause8,
         ]);
         assert_eq!(Solver::new(formula).run(), false);

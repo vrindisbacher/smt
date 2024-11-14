@@ -3,16 +3,16 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use super::assignment::Assignments;
-use super::formula::Formula;
-use super::var::Lit;
+use super::formula::CnfFormula;
+use crate::var::Lit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Clause<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub struct CnfClause<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub vars: Vec<Lit<T>>,
     pub watchlist: Vec<usize>,
 }
 
-impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
+impl<T: PartialEq + Eq + Hash + Debug + Clone> CnfClause<T> {
     pub fn new(vars: Vec<Lit<T>>) -> Self {
         let watchlist;
         if vars.len() >= 2 {
@@ -23,7 +23,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
         Self { vars, watchlist }
     }
 
-    pub fn is_watching_at_least_one_true(&self, assignment: &Assignments<T>) -> bool {
+    pub(crate) fn is_watching_at_least_one_true(&self, assignment: &Assignments<T>) -> bool {
         for idx in self.watchlist.iter() {
             if let Some(assn) = assignment.get_assignment(&self.vars[*idx]) {
                 if assn {
@@ -34,9 +34,9 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Clause<T> {
         false
     }
 
-    pub fn resolve_watch(
+    pub(crate) fn resolve_watch(
         &self,
-        formula: &mut Formula<T>,
+        formula: &mut CnfFormula<T>,
         lit_to_change: &Lit<T>,
         assignment: &mut Assignments<T>,
     ) -> Result<(), ()> {
