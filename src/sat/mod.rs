@@ -6,7 +6,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::var::{Lit, Var};
+use crate::var::{IntoCnf, Lit, Var};
 use assignment::Assignments;
 use formula::CnfFormula;
 
@@ -17,7 +17,8 @@ pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
-    pub fn new(formula: CnfFormula<T>) -> Self {
+    pub fn new(formula: impl IntoCnf<T>) -> Self {
+        let formula = formula.into_cnf();
         let all_vars = Self::get_all_vars(&formula);
         Self { all_vars, formula }
     }
@@ -1278,5 +1279,57 @@ mod sat_test {
         ";
         let formula = parse_formula_from_dimacs_str(str);
         assert_eq!(Solver::new(formula).run(), true);
+    }
+
+    #[test]
+    fn obviously_unsat_iff() {
+        let var_x = Var::new("x");
+        let x = Lit::pos(var_x);
+        let neg_x = Lit::neg(var_x);
+        let formula = x.iff(neg_x);
+        assert_eq!(Solver::new(formula.into_cnf()).run(), false);
+    }
+
+    #[test]
+    fn obviously_sat_iff() {
+        let var_x = Var::new("x");
+        let x = Lit::pos(var_x);
+        let formula = x.iff(x);
+        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+    }
+
+    #[test]
+    fn obviously_sat_imp() {
+        let var_x = Var::new("x");
+        let var_y = Var::new("y");
+        let x = Lit::pos(var_x);
+        let y = Lit::pos(var_y);
+        let formula = x.implies(y);
+        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+    }
+
+    #[test]
+    fn tricky_sat_imp() {
+        let var_x = Var::new("x");
+        let x = Lit::pos(var_x);
+        let neg_x = Lit::neg(var_x);
+        let formula = neg_x.implies(x);
+        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+    }
+
+    #[test]
+    fn sat_arbitrary_to_cnf() {
+        let var_x = Var::new("x");
+        let var_y = Var::new("y");
+        let var_z = Var::new("z");
+        let var_w = Var::new("w");
+
+        let x = Lit::pos(var_x);
+        let y = Lit::pos(var_y);
+        let not_z = Lit::neg(var_z);
+        let w = Lit::pos(var_w);
+
+        let formula = ((x.or(y)).and(not_z)).implies(w);
+        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
     }
 }

@@ -1,5 +1,5 @@
 use super::clause::CnfClause;
-use crate::var::Lit;
+use crate::var::{IntoCnf, Lit};
 
 use std::clone::Clone;
 use std::collections::HashMap;
@@ -11,6 +11,12 @@ pub struct CnfFormula<T: PartialEq + Eq + Hash + Debug + Clone> {
     pub clauses: Vec<CnfClause<T>>,
     // var name and negation to index of clauses in formula...
     pub watched_by_map: HashMap<(T, bool), Vec<usize>>,
+}
+
+impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoCnf<T> for CnfFormula<T> {
+    fn into_cnf(self) -> CnfFormula<T> {
+        self
+    }
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> CnfFormula<T> {
