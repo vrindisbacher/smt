@@ -1,10 +1,7 @@
-use crate::sat::{
-    clause::Clause,
-    formula::Formula,
-    var::{Lit, Var},
-};
+use crate::sat::{clause::CnfClause, formula::CnfFormula};
+use crate::var::{Lit, Var};
 
-pub fn parse_formula_from_dimacs_str(lines: &str) -> Formula<i32> {
+pub fn parse_formula_from_dimacs_str(lines: &str) -> CnfFormula<i32> {
     let mut clauses = Vec::new();
 
     let mut collector = Vec::new();
@@ -36,10 +33,10 @@ pub fn parse_formula_from_dimacs_str(lines: &str) -> Formula<i32> {
         }
         // Add the clause to the formula
         if clause_ended {
-            clauses.push(Clause::new(collector));
+            clauses.push(CnfClause::new(collector));
             collector = Vec::new();
             clause_ended = false;
         }
     }
-    Formula::new(clauses)
+    CnfFormula::new(clauses)
 }

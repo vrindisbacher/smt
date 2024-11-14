@@ -1,8 +1,9 @@
 use dimacs::parse_formula_from_dimacs_str;
 use sat::Solver;
 
-mod dimacs;
-mod sat;
+pub mod dimacs;
+pub mod sat;
+pub mod var;
 
 fn main() {
     env_logger::init();
