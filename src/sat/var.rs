@@ -7,7 +7,7 @@ use crate::sat::clause::CnfClause;
 use crate::sat::formula::CnfFormula;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PropOp {
+enum BinOp {
     And,
     Or,
     Implies,
@@ -15,9 +15,15 @@ pub enum PropOp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+enum UnOp {
+    Not,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Prop<T: PartialEq + Eq + Hash + Debug + Clone> {
     Lit(Lit<T>),
-    Prop(Box<Prop<T>>, Box<Prop<T>>, PropOp),
+    UnProp(Box<Prop<T>>, UnOp),
+    BinProp(Box<Prop<T>>, Box<Prop<T>>, BinOp),
 }
 
 pub trait IntoProp<T: PartialEq + Eq + Hash + Debug + Clone> {
@@ -45,8 +51,8 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
         Self::Lit(lit)
     }
 
-    pub(crate) fn prop(lhs: Prop<T>, rhs: Prop<T>, op: PropOp) -> Self {
-        Self::Prop(Box::new(lhs), Box::new(rhs), op)
+    pub(crate) fn prop(lhs: Prop<T>, rhs: Prop<T>, op: BinOp) -> Self {
+        Self::BinProp(Box::new(lhs), Box::new(rhs), op)
     }
 
     // pub fn negate(self) -> Self {
@@ -142,7 +148,10 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
                     vec.push(lit.get_var());
                 }
             }
-            Prop::Prop(lhs, rhs, _) => {
+            Prop::UnProp(prop, _) => {
+                prop.collect_vars_helper(vec);
+            }
+            Prop::BinProp(lhs, rhs, _) => {
                 lhs.collect_vars_helper(vec);
                 rhs.collect_vars_helper(vec);
             }
@@ -164,11 +173,14 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
                     *assignments.get(&x.get_name()).unwrap()
                 }
             }
-            Prop::Prop(lhs, rhs, op) => match op {
-                PropOp::And => lhs.check(assignments) && rhs.check(assignments),
-                PropOp::Or => lhs.check(assignments) || rhs.check(assignments),
-                PropOp::Implies => !lhs.check(assignments) || rhs.check(assignments),
-                PropOp::Iff => {
+            Prop::UnProp(expr, op) => match op {
+                UnOp::Not => !expr.check(assignments),
+            },
+            Prop::BinProp(lhs, rhs, op) => match op {
+                BinOp::And => lhs.check(assignments) && rhs.check(assignments),
+                BinOp::Or => lhs.check(assignments) || rhs.check(assignments),
+                BinOp::Implies => !lhs.check(assignments) || rhs.check(assignments),
+                BinOp::Iff => {
                     (!lhs.check(assignments) || rhs.check(assignments))
                         && (!rhs.check(assignments) || lhs.check(assignments))
                 }
@@ -217,19 +229,23 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
     }
 
     pub fn implies(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::Prop(Box::new(self), Box::new(rhs.into_prop()), PropOp::Implies)
+        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Implies)
     }
 
     pub fn iff(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::Prop(Box::new(self), Box::new(rhs.into_prop()), PropOp::Iff)
+        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Iff)
     }
 
     pub fn or(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::Prop(Box::new(self), Box::new(rhs.into_prop()), PropOp::Or)
+        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Or)
     }
 
     pub fn and(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::Prop(Box::new(self), Box::new(rhs.into_prop()), PropOp::And)
+        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::And)
+    }
+
+    pub fn not(self) -> Prop<T> {
+        Self::UnProp(Box::new(self), UnOp::Not)
     }
 }
 
@@ -263,19 +279,19 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Lit<T> {
     }
 
     pub fn implies(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), PropOp::Implies)
+        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Implies)
     }
 
     pub fn iff(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), PropOp::Iff)
+        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Iff)
     }
 
     pub fn or(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), PropOp::Or)
+        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Or)
     }
 
     pub fn and(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), PropOp::And)
+        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::And)
     }
 
     pub fn neg(var: Var<T>) -> Self {

@@ -1,9 +1,8 @@
-use dimacs::parse_formula_from_dimacs_str;
-use sat::Solver;
+use sat::dimacs::parse_formula_from_dimacs_str;
+use sat::SATSolver;
 
-pub mod dimacs;
 pub mod sat;
-pub mod var;
+pub mod theories;
 
 fn main() {
     env_logger::init();
@@ -181,7 +180,7 @@ fn main() {
             63 -86 -98 0
         ";
     let formula = parse_formula_from_dimacs_str(str);
-    let res = Solver::new(formula).run();
-    println!("SAT: {res}");
-    assert_eq!(res, false);
+    let res = SATSolver::new(formula).run();
+    println!("SAT: {}", res.is_sat());
+    assert!(res.is_unsat());
 }

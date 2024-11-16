@@ -2,7 +2,7 @@ use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::var::Lit;
+use super::var::Lit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CnfClause<T: PartialEq + Eq + Hash + Debug + Clone> {

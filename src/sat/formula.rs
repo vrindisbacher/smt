@@ -1,5 +1,5 @@
 use super::clause::CnfClause;
-use crate::var::IntoCnf;
+use super::var::IntoCnf;
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;

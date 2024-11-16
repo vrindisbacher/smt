@@ -1,5 +1,5 @@
+use crate::sat::var::{Lit, Var};
 use crate::sat::{clause::CnfClause, formula::CnfFormula};
-use crate::var::{Lit, Var};
 
 pub(crate) fn parse_formula_from_dimacs_str(lines: &str) -> CnfFormula<i32> {
     let mut clauses = Vec::new();

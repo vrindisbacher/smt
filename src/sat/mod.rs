@@ -1,18 +1,51 @@
 mod assignment;
 pub mod clause;
+pub mod dimacs;
 pub mod formula;
+pub mod var;
 
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::{clone::Clone, collections::HashMap};
 
-use crate::var::{IntoCnf, Lit, Var};
 use assignment::Assignments;
 use clause::CnfClause;
 use formula::CnfFormula;
+use var::{IntoCnf, Lit, Var};
+
+#[derive(Debug)]
+pub enum SATSolverResult<T> {
+    Unsat,
+    Sat(HashMap<T, bool>),
+}
+
+impl<T> SATSolverResult<T> {
+    pub fn is_sat(&self) -> bool {
+        if let Self::Sat(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_unsat(&self) -> bool {
+        !self.is_sat()
+    }
+}
+
+impl<T> PartialEq for SATSolverResult<T> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (SATSolverResult::Unsat, SATSolverResult::Unsat) => true,
+            (SATSolverResult::Unsat, SATSolverResult::Sat(_)) => false,
+            (SATSolverResult::Sat(_), SATSolverResult::Unsat) => false,
+            (SATSolverResult::Sat(_), SATSolverResult::Sat(_)) => true,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
-pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub struct SATSolver<T: PartialEq + Eq + Hash + Debug + Clone> {
     all_vars: Vec<Lit<T>>,
     // lit to vec of clause idxs that contain it
     lit_to_related_clause_map: HashMap<(T, bool), Vec<usize>>,
@@ -22,7 +55,7 @@ pub struct Solver<T: PartialEq + Eq + Hash + Debug + Clone> {
 }
 
 #[allow(private_bounds)]
-impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
+impl<T: PartialEq + Eq + Hash + Debug + Clone> SATSolver<T> {
     pub fn new(formula: impl IntoCnf<T>) -> Self {
         let formula = formula.into_cnf();
         let all_vars = Self::get_all_vars(&formula);
@@ -335,19 +368,23 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Solver<T> {
         true
     }
 
-    pub fn run(mut self) -> bool {
+    pub fn run(mut self) -> SATSolverResult<T> {
         let mut assignments = Assignments::new();
-        self.dpll(&mut assignments)
+        if self.dpll(&mut assignments) {
+            SATSolverResult::Sat(assignments.assignments_stack.pop().unwrap().0)
+        } else {
+            SATSolverResult::Unsat
+        }
     }
 }
 
 #[cfg(test)]
 mod sat_test {
-    use crate::dimacs::parse_formula_from_dimacs_str;
+    use super::dimacs::parse_formula_from_dimacs_str;
+    use super::var::{Lit, Var};
     use crate::sat::{clause::CnfClause, formula::CnfFormula};
-    use crate::var::{Lit, Var};
 
-    use super::Solver;
+    use super::SATSolver;
 
     #[test]
     fn unsat_simple() {
@@ -357,7 +394,7 @@ mod sat_test {
         let clause = CnfClause::new(vec![var]);
         let clause_neg = CnfClause::new(vec![var_neg]);
         let formula = CnfFormula::new(vec![clause, clause_neg]);
-        assert_eq!(Solver::new(formula).run(), false)
+        assert!(SATSolver::new(formula).run().is_unsat())
     }
 
     #[test]
@@ -366,7 +403,7 @@ mod sat_test {
         let var = Lit::pos(var_a);
         let clause = CnfClause::new(vec![var]);
         let formula = CnfFormula::new(vec![clause]);
-        assert_eq!(Solver::new(formula).run(), true)
+        assert!(SATSolver::new(formula).run().is_sat())
     }
 
     #[test]
@@ -375,7 +412,7 @@ mod sat_test {
         let var = Lit::neg(var_a);
         let clause = CnfClause::new(vec![var]);
         let formula = CnfFormula::new(vec![clause]);
-        assert_eq!(Solver::new(formula).run(), true)
+        assert!(SATSolver::new(formula).run().is_sat())
     }
 
     #[test]
@@ -388,7 +425,7 @@ mod sat_test {
         let clause1 = CnfClause::new(vec![var1_neg]);
         let clause2 = CnfClause::new(vec![var1, var2]);
         let formula = CnfFormula::new(vec![clause1, clause2]);
-        assert_eq!(Solver::new(formula).run(), true)
+        assert!(SATSolver::new(formula).run().is_sat())
     }
 
     #[test]
@@ -426,7 +463,7 @@ mod sat_test {
         let clause6 = CnfClause::new(vec![neg_b, f, a]);
 
         let formula = CnfFormula::new(vec![clause1, clause2, clause3, clause4, clause5, clause6]);
-        assert_eq!(Solver::new(formula).run(), true);
+        assert!(SATSolver::new(formula).run().is_sat());
     }
 
     #[test]
@@ -452,7 +489,7 @@ mod sat_test {
         let formula = CnfFormula::new(vec![
             clause1, clause2, clause3, clause4, clause5, clause6, clause7, clause8,
         ]);
-        assert_eq!(Solver::new(formula).run(), false);
+        assert!(SATSolver::new(formula).run().is_unsat());
     }
 
     #[test]
@@ -466,7 +503,7 @@ mod sat_test {
           2 3 -1 0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), true);
+        assert!(SATSolver::new(formula).run().is_sat());
     }
     #[test]
     fn simple_dimacs2() {
@@ -477,7 +514,7 @@ mod sat_test {
             -3 -4 0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), true);
+        assert!(SATSolver::new(formula).run().is_sat());
     }
 
     #[test]
@@ -656,7 +693,7 @@ mod sat_test {
             63 -86 -98 0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), false);
+        assert!(SATSolver::new(formula).run().is_unsat());
     }
 
     #[test]
@@ -755,7 +792,7 @@ mod sat_test {
             -13 -41 43 0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), true)
+        assert!(SATSolver::new(formula).run().is_sat());
     }
 
     #[test]
@@ -936,7 +973,7 @@ mod sat_test {
             -39  40  38  0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), false);
+        assert!(SATSolver::new(formula).run().is_unsat());
     }
 
     #[test]
@@ -1473,7 +1510,7 @@ mod sat_test {
              0
         ";
         let formula = parse_formula_from_dimacs_str(str);
-        assert_eq!(Solver::new(formula).run(), true);
+        assert!(SATSolver::new(formula).run().is_sat());
     }
 
     #[test]
@@ -1482,7 +1519,7 @@ mod sat_test {
         let x = Lit::pos(var_x);
         let neg_x = Lit::neg(var_x);
         let formula = x.iff(neg_x);
-        assert_eq!(Solver::new(formula.into_cnf()).run(), false);
+        assert!(SATSolver::new(formula.into_cnf()).run().is_unsat());
     }
 
     #[test]
@@ -1490,7 +1527,7 @@ mod sat_test {
         let var_x = Var::new("x");
         let x = Lit::pos(var_x);
         let formula = x.iff(x);
-        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+        assert!(SATSolver::new(formula.into_cnf()).run().is_sat());
     }
 
     #[test]
@@ -1500,7 +1537,7 @@ mod sat_test {
         let x = Lit::pos(var_x);
         let y = Lit::pos(var_y);
         let formula = x.implies(y);
-        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+        assert!(SATSolver::new(formula.into_cnf()).run().is_sat());
     }
 
     #[test]
@@ -1509,7 +1546,7 @@ mod sat_test {
         let x = Lit::pos(var_x);
         let neg_x = Lit::neg(var_x);
         let formula = neg_x.implies(x);
-        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+        assert!(SATSolver::new(formula.into_cnf()).run().is_sat());
     }
 
     #[test]
@@ -1525,6 +1562,6 @@ mod sat_test {
         let w = Lit::pos(var_w);
 
         let formula = ((x.or(y)).and(not_z)).implies(w);
-        assert_eq!(Solver::new(formula.into_cnf()).run(), true);
+        assert!(SATSolver::new(formula.into_cnf()).run().is_sat());
     }
 }

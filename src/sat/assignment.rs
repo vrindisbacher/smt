@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::var::{Lit, Var};
+use super::var::{Lit, Var};
 
 #[derive(Debug)]
 pub(crate) struct Assignments<T: PartialEq + Eq + Hash + Debug + Clone> {
