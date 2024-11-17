@@ -1,6 +1,6 @@
 use formula::QFLIAFormula;
 
-use crate::sat::var::Prop;
+use crate::sat::var::{SATProp, SATPropOps};
 use crate::sat::SATSolverResult;
 use crate::theories::formula::SMTtoSatPropResolver;
 
@@ -57,14 +57,14 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
         }
     }
 
-    fn find_sat_assignment(&self, sat_prop: Prop<u32>) -> SATSolverResult<u32> {
+    fn find_sat_assignment(&self, sat_prop: SATProp<u32>) -> SATSolverResult<u32> {
         let solver = crate::sat::SATSolver::new(sat_prop.into_cnf());
         solver.run()
     }
 
-    fn into_sat_prop(&self, goal: &QFLIASolverOperand<T>) -> Prop<u32> {
+    fn into_sat_prop(&self, goal: &QFLIASolverOperand<T>) -> SATProp<u32> {
         let mut smt_to_sat_resolver = SMTtoSatPropResolver::new();
-        let mut curr_formula: Prop<u32>;
+        let mut curr_formula: SATProp<u32>;
         // and turn the goal into a prop
         let goal_prop = smt_to_sat_resolver.expr_to_sat_prop(goal);
         // if there are no constraints and just a goal
@@ -88,7 +88,6 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
 
 #[cfg(test)]
 mod qflia_test {
-    use crate::theories::formula::SMTOps;
 
     use super::{
         formula::{Int, QFLIAOp},
@@ -103,8 +102,8 @@ mod qflia_test {
         // the formula is normalized properly
         // i.e. not a != 0 is transformed into not (a = 0)
         // so that the sat formula we get is actually a /\ not a
-        let clause = Int::from_var("a").equals(Int::from_const(0));
-        let neg_clause = Int::from_var("a").n_equals(Int::from_const(0));
+        let clause = Int::from_var("a").eq(Int::from_const(0));
+        let neg_clause = Int::from_var("a").neq(Int::from_const(0));
         let smt_formula = clause.and(neg_clause);
         let mut solver = QFLIASolver::new();
         assert!(solver.assert(smt_formula).is_unsat());

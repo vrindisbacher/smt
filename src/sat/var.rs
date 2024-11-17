@@ -7,7 +7,7 @@ use crate::sat::clause::CnfClause;
 use crate::sat::formula::CnfFormula;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum BinOp {
+pub(crate) enum BinOp {
     And,
     Or,
     Implies,
@@ -15,46 +15,80 @@ enum BinOp {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum UnOp {
+pub(crate) enum UnOp {
     Not,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Prop<T: PartialEq + Eq + Hash + Debug + Clone> {
+pub(crate) enum SATProp<T: PartialEq + Eq + Hash + Debug + Clone> {
     Lit(Lit<T>),
-    UnProp(Box<Prop<T>>, UnOp),
-    BinProp(Box<Prop<T>>, Box<Prop<T>>, BinOp),
+    UnProp(Box<SATProp<T>>, UnOp),
+    BinProp(Box<SATProp<T>>, Box<SATProp<T>>, BinOp),
 }
 
-pub trait IntoProp<T: PartialEq + Eq + Hash + Debug + Clone> {
-    fn into_prop(self) -> Prop<T>;
+pub(crate) trait IntoProp<T: PartialEq + Eq + Hash + Debug + Clone> {
+    fn into_prop(self) -> SATProp<T>;
+}
+
+pub(crate) trait SATPropOps<T: PartialEq + Eq + Hash + Debug + Clone>:
+    IntoProp<T> + Sized
+{
+    fn implies(self, rhs: impl IntoProp<T>) -> SATProp<T> {
+        SATProp::BinProp(
+            Box::new(self.into_prop()),
+            Box::new(rhs.into_prop()),
+            BinOp::Implies,
+        )
+    }
+
+    fn iff(self, rhs: impl IntoProp<T>) -> SATProp<T> {
+        SATProp::BinProp(
+            Box::new(self.into_prop()),
+            Box::new(rhs.into_prop()),
+            BinOp::Iff,
+        )
+    }
+
+    fn or(self, rhs: impl IntoProp<T>) -> SATProp<T> {
+        SATProp::BinProp(
+            Box::new(self.into_prop()),
+            Box::new(rhs.into_prop()),
+            BinOp::Or,
+        )
+    }
+
+    fn and(self, rhs: impl IntoProp<T>) -> SATProp<T> {
+        SATProp::BinProp(
+            Box::new(self.into_prop()),
+            Box::new(rhs.into_prop()),
+            BinOp::And,
+        )
+    }
+
+    fn not(self) -> SATProp<T> {
+        SATProp::UnProp(Box::new(self.into_prop()), UnOp::Not)
+    }
 }
 
 pub(crate) trait IntoCnf<T: PartialEq + Eq + Hash + Debug + Clone> {
     fn into_cnf(self) -> CnfFormula<T>;
 }
 
-impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoProp<T> for Prop<T> {
-    fn into_prop(self) -> Prop<T> {
+impl<T: PartialEq + Eq + Hash + Debug + Clone> SATPropOps<T> for SATProp<T> {}
+
+impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoProp<T> for SATProp<T> {
+    fn into_prop(self) -> SATProp<T> {
         self
     }
 }
 
-impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoCnf<T> for Prop<T> {
+impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoCnf<T> for SATProp<T> {
     fn into_cnf(self) -> CnfFormula<T> {
         self.into_cnf()
     }
 }
 
-impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
-    pub(crate) fn singular(lit: Lit<T>) -> Self {
-        Self::Lit(lit)
-    }
-
-    pub(crate) fn prop(lhs: Prop<T>, rhs: Prop<T>, op: BinOp) -> Self {
-        Self::BinProp(Box::new(lhs), Box::new(rhs), op)
-    }
-
+impl<T: PartialEq + Eq + Hash + Debug + Clone> SATProp<T> {
     // pub fn negate(self) -> Self {
     //     match self {
     //         FirstOrderProp::Lit(lit) => {
@@ -143,15 +177,15 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
 
     fn collect_vars_helper<'a>(&'a self, vec: &mut Vec<&'a Var<T>>) {
         match self {
-            Prop::Lit(lit) => {
+            SATProp::Lit(lit) => {
                 if !vec.contains(&lit.get_var()) {
                     vec.push(lit.get_var());
                 }
             }
-            Prop::UnProp(prop, _) => {
+            SATProp::UnProp(prop, _) => {
                 prop.collect_vars_helper(vec);
             }
-            Prop::BinProp(lhs, rhs, _) => {
+            SATProp::BinProp(lhs, rhs, _) => {
                 lhs.collect_vars_helper(vec);
                 rhs.collect_vars_helper(vec);
             }
@@ -166,17 +200,17 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
 
     fn check(&self, assignments: &mut HashMap<&T, bool>) -> bool {
         match self {
-            Prop::Lit(x) => {
+            SATProp::Lit(x) => {
                 return if x.is_negated() {
                     !assignments.get(&x.get_name()).unwrap()
                 } else {
                     *assignments.get(&x.get_name()).unwrap()
                 }
             }
-            Prop::UnProp(expr, op) => match op {
+            SATProp::UnProp(expr, op) => match op {
                 UnOp::Not => !expr.check(assignments),
             },
-            Prop::BinProp(lhs, rhs, op) => match op {
+            SATProp::BinProp(lhs, rhs, op) => match op {
                 BinOp::And => lhs.check(assignments) && rhs.check(assignments),
                 BinOp::Or => lhs.check(assignments) || rhs.check(assignments),
                 BinOp::Implies => !lhs.check(assignments) || rhs.check(assignments),
@@ -188,7 +222,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
         }
     }
 
-    pub(crate) fn into_cnf(self) -> CnfFormula<T> {
+    pub fn into_cnf(self) -> CnfFormula<T> {
         // TODO(VR): Use this later
         //
         // turn all implications into not, or, and
@@ -227,26 +261,6 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Prop<T> {
         }
         CnfFormula::new(clauses)
     }
-
-    pub fn implies(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Implies)
-    }
-
-    pub fn iff(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Iff)
-    }
-
-    pub fn or(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::Or)
-    }
-
-    pub fn and(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Self::BinProp(Box::new(self), Box::new(rhs.into_prop()), BinOp::And)
-    }
-
-    pub fn not(self) -> Prop<T> {
-        Self::UnProp(Box::new(self), UnOp::Not)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,22 +292,6 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Lit<T> {
         }
     }
 
-    pub fn implies(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Implies)
-    }
-
-    pub fn iff(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Iff)
-    }
-
-    pub fn or(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::Or)
-    }
-
-    pub fn and(self, rhs: impl IntoProp<T>) -> Prop<T> {
-        Prop::prop(Prop::singular(self), rhs.into_prop(), BinOp::And)
-    }
-
     pub fn neg(var: Var<T>) -> Self {
         Self { var, negated: true }
     }
@@ -312,7 +310,9 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> Lit<T> {
 }
 
 impl<T: PartialEq + Eq + Hash + Debug + Clone> IntoProp<T> for Lit<T> {
-    fn into_prop(self) -> Prop<T> {
-        Prop::singular(self)
+    fn into_prop(self) -> SATProp<T> {
+        SATProp::Lit(self)
     }
 }
+
+impl<T: PartialEq + Eq + Hash + Debug + Clone> SATPropOps<T> for Lit<T> {}

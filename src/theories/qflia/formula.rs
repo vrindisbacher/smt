@@ -1,20 +1,21 @@
-use crate::theories::formula::{IntoSMT, SMTFormula, SMTOps};
+use crate::theories::formula::SMTFormula;
 use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum QFLIAUnOp {
+enum QFLIAUnOp {
     Neg,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum QFLIABinOp {
+enum QFLIABinOp {
     Add,
     Mul,
     Gte,
     Lte,
 }
 
+#[allow(private_interfaces)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum QFLIAFormula<T: Debug + Hash + PartialEq + Eq> {
     Atom(Int<T>),
@@ -26,16 +27,18 @@ pub trait IntoQFLIAFormula<T: Debug + Hash + PartialEq + Eq> {
     fn into_qflia(self) -> QFLIAFormula<T>;
 }
 
-pub trait ValidOperand<T: Debug + Hash + PartialEq + Eq> {
-    fn ensure_bool(&self) -> bool;
-    fn ensure_only_arith_ops(&self) -> bool;
-}
+pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>: IntoQFLIAFormula<T> + Sized {
+    //
+    // Note: We cannot construct invalid formulas because all
+    // ops that return boolean expressions (i.e. not arithmetic)
+    // return SMTFormulas, not QFLIA formulas
+    //
+    // Therefore, the invariant that arguments to functions like
+    // add or sub are only arithmetic ops is automatically upheld
+    // by the type system
+    //
 
-pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
-    IntoQFLIAFormula<T> + ValidOperand<T> + Sized
-{
-    fn add(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> QFLIAFormula<T> {
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
+    fn add(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
         QFLIAFormula::BinExpr(
             Box::new(self.into_qflia()),
             Box::new(rhs.into_qflia()),
@@ -43,9 +46,8 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
         )
     }
 
-    fn sub(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> QFLIAFormula<T> {
+    fn sub(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
         // turns x - y into x + (-y)
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
         QFLIAFormula::BinExpr(
             Box::new(self.into_qflia()),
             Box::new(rhs.into_qflia().neg()),
@@ -53,8 +55,7 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
         )
     }
 
-    fn mul(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> QFLIAFormula<T> {
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
+    fn mul(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
         QFLIAFormula::BinExpr(
             Box::new(self.into_qflia()),
             Box::new(rhs.into_qflia()),
@@ -62,55 +63,42 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
         )
     }
 
-    fn gte(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> QFLIAFormula<T> {
+    fn gte(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // normalized so that we are always comparing to 0
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
-        QFLIAFormula::BinExpr(
+        SMTFormula::Atom(QFLIAFormula::BinExpr(
             Box::new(self.into_qflia().sub(rhs.into_qflia())),
             Box::new(Int::from_const(0).into_qflia()),
             QFLIABinOp::Gte,
-        )
+        ))
     }
 
-    fn lte(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> QFLIAFormula<T> {
+    fn lte(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // normalized so that we are always comparing to 0
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
-        QFLIAFormula::BinExpr(
+        SMTFormula::Atom(QFLIAFormula::BinExpr(
             Box::new(self.into_qflia().sub(rhs.into_qflia())),
             Box::new(Int::from_const(0).into_qflia()),
             QFLIABinOp::Lte,
-        )
+        ))
     }
 
-    fn gt(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> SMTFormula<QFLIAFormula<T>> {
-        // returns
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
+    fn gt(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // turns gt into not ( lte ) and makes sure we compare to zero
-        self.into_qflia().lte(rhs.into_qflia()).into_smt().not()
+        self.into_qflia().lte(rhs.into_qflia()).not()
     }
 
-    fn lt(self, rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>) -> SMTFormula<QFLIAFormula<T>> {
+    fn lt(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // turns lt into not ( gte )
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
-        self.into_qflia().gte(rhs.into_qflia()).into_smt().not()
+        self.into_qflia().gte(rhs.into_qflia()).not()
     }
 
-    fn equals(
-        self,
-        rhs: impl IntoQFLIAFormula<T> + ValidOperand<T> + Clone,
-    ) -> SMTFormula<QFLIAFormula<T>> {
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
+    fn eq(self, rhs: impl IntoQFLIAFormula<T> + Clone) -> SMTFormula<QFLIAFormula<T>> {
         // turns eq into gte && lte
         let lhs = self.into_qflia();
         let rhs = rhs.into_qflia();
         lhs.clone().gte(rhs.clone()).and(lhs.lte(rhs))
     }
 
-    fn n_equals(
-        self,
-        rhs: impl IntoQFLIAFormula<T> + ValidOperand<T>,
-    ) -> SMTFormula<QFLIAFormula<T>> {
-        assert_eq!(rhs.ensure_only_arith_ops(), true);
+    fn neq(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // turns neq into gt && lt
         let lhs = self.into_qflia();
         let rhs = rhs.into_qflia();
@@ -118,8 +106,6 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
     }
 
     fn neg(self) -> QFLIAFormula<T> {
-        // self has to be only arith ops
-        assert_eq!(self.ensure_only_arith_ops(), true);
         QFLIAFormula::UnaryExpr(Box::new(self.into_qflia()), QFLIAUnOp::Neg)
     }
 }
@@ -127,32 +113,6 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>:
 impl<T: Debug + Hash + PartialEq + Eq> IntoQFLIAFormula<T> for QFLIAFormula<T> {
     fn into_qflia(self) -> QFLIAFormula<T> {
         self
-    }
-}
-
-impl<T: Debug + Hash + PartialEq + Eq> ValidOperand<T> for QFLIAFormula<T> {
-    fn ensure_only_arith_ops(&self) -> bool {
-        match self {
-            QFLIAFormula::Atom(_) => true,
-            QFLIAFormula::UnaryExpr(expr, _) => expr.ensure_only_arith_ops(),
-            QFLIAFormula::BinExpr(lhs, rhs, op) => match op {
-                QFLIABinOp::Add | QFLIABinOp::Mul => {
-                    lhs.ensure_only_arith_ops() && rhs.ensure_only_arith_ops()
-                }
-                _ => false,
-            },
-        }
-    }
-
-    fn ensure_bool(&self) -> bool {
-        match self {
-            QFLIAFormula::Atom(_) => false,
-            QFLIAFormula::UnaryExpr(_, _) => false,
-            QFLIAFormula::BinExpr(_, _, op) => match op {
-                QFLIABinOp::Add | QFLIABinOp::Mul => false,
-                QFLIABinOp::Gte | QFLIABinOp::Lte => true,
-            },
-        }
     }
 }
 
@@ -179,15 +139,6 @@ impl<T: Debug + Hash + PartialEq + Eq> Int<T> {
 impl<T: Debug + Hash + PartialEq + Eq> IntoQFLIAFormula<T> for Int<T> {
     fn into_qflia(self) -> QFLIAFormula<T> {
         QFLIAFormula::Atom(self)
-    }
-}
-
-impl<T: Debug + Hash + PartialEq + Eq> ValidOperand<T> for Int<T> {
-    fn ensure_only_arith_ops(&self) -> bool {
-        true
-    }
-    fn ensure_bool(&self) -> bool {
-        false
     }
 }
 

@@ -382,6 +382,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> SATSolver<T> {
 mod sat_test {
     use super::dimacs::parse_formula_from_dimacs_str;
     use super::var::{Lit, Var};
+    use crate::sat::var::SATPropOps;
     use crate::sat::{clause::CnfClause, formula::CnfFormula};
 
     use super::SATSolver;
