@@ -55,14 +55,6 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>: IntoQFLIAFormula<T>
         )
     }
 
-    fn mul(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
-        QFLIAFormula::BinExpr(
-            Box::new(self.into_qflia()),
-            Box::new(rhs.into_qflia()),
-            QFLIABinOp::Mul,
-        )
-    }
-
     fn gte(self, rhs: impl IntoQFLIAFormula<T>) -> SMTFormula<QFLIAFormula<T>> {
         // normalized so that we are always comparing to 0
         SMTFormula::Atom(QFLIAFormula::BinExpr(
@@ -133,6 +125,23 @@ impl<T: Debug + Hash + PartialEq + Eq> Int<T> {
 
     pub fn from_var(val: T) -> Self {
         Int::Var(val)
+    }
+
+    //
+    // mul
+    //
+    // implemented only for ints because
+    // qflia formula's must be of the form r * a where r = rational
+    // and a is a linear term
+    //
+    // Restricting mul to Int::from_const(3).mul(Int::from_var(x).add(Int::from_var(y)))
+    // does this.
+    pub fn mul(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
+        QFLIAFormula::BinExpr(
+            Box::new(self.into_qflia()),
+            Box::new(rhs.into_qflia()),
+            QFLIABinOp::Mul,
+        )
     }
 }
 
