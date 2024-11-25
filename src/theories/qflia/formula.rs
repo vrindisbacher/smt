@@ -3,12 +3,12 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum QFLIAUnOp {
+pub(crate) enum QFLIAUnOp {
     Neg,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum QFLIABinOp {
+pub(crate) enum QFLIABinOp {
     Add,
     Mul,
     Gte,

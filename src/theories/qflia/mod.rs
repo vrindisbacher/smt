@@ -1,16 +1,10 @@
-use formula::QFLIAFormula;
+use formula::{QFLIAFormula, QFLIAUnOp};
 
-use crate::sat::var::{SATProp, SATPropOps};
-use crate::sat::SATSolverResult;
-use crate::theories::formula::SMTtoSatPropResolver;
-
-use super::formula::SMTFormula;
 use std::fmt::Debug;
 use std::hash::Hash;
 
 pub mod formula;
-
-type QFLIASolverOperand<T> = SMTFormula<QFLIAFormula<T>>;
+mod simplex;
 
 pub enum QFLIASolverResult {
     Sat,
@@ -33,7 +27,7 @@ impl QFLIASolverResult {
 pub struct QFLIASolver<T: Debug + Hash + PartialEq + Eq> {
     // QFLIA solver has constraints which are QFLIA Formulas
     // possibly joined by conjunctions or disjunctions or other crazy stuff
-    goals: Vec<QFLIASolverOperand<T>>,
+    goals: Vec<QFLIAFormula<T>>,
 }
 
 impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
@@ -41,35 +35,40 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
         Self { goals: Vec::new() }
     }
 
-    pub fn assert(&mut self, goal: QFLIASolverOperand<T>) {
+    pub fn assert(&mut self, goal: QFLIAFormula<T>) {
+        // Requires goal to be in bool form
+        //
+        // Letting this invariant be upheld by the SMT
+        // Solver that passes goals to the QFLIA solver
         self.goals.push(goal);
     }
 
-    pub fn solve(&self) -> QFLIASolverResult {
-        todo!()
+    fn decompose_goal(&self, goal: &QFLIAFormula<T>) {
+        // a goal like: x + y <= 0 should be decompose into a row
+        // of a tableau like so:
+        //     x y s1 rhs
+        // s1  1 1 1  0
+        // obj 0 0 0  0
+        match goal {
+            QFLIAFormula::Atom(x) => match x {},
+            QFLIAFormula::UnaryExpr(lhs, op) => match op {
+                QFLIAUnOp::Neg => {}
+            },
+            QFLIAFormula::BinExpr(lhs, rhs, op) => match op {
+                formula::QFLIABinOp::Add => todo!(),
+                formula::QFLIABinOp::Mul => todo!(),
+                formula::QFLIABinOp::Gte => todo!(),
+                formula::QFLIABinOp::Lte => todo!(),
+            },
+        }
     }
-}
 
-#[cfg(test)]
-mod qflia_test {
-
-    use super::{
-        formula::{Int, QFLIAOp},
-        QFLIASolver,
-    };
-
-    #[test]
-    pub fn unsat_from_sat_assignment() {
-        // analogous to a /\ not a
-        //
-        // this is a good test because it requires that
-        // the formula is normalized properly
-        // i.e. not a != 0 is transformed into not (a = 0)
-        // so that the sat formula we get is actually a /\ not a
-        let clause = Int::from_var("a").eq(Int::from_const(0));
-        let neg_clause = Int::from_var("a").neq(Int::from_const(0));
-        let smt_formula = clause.and(neg_clause);
-        let mut solver = QFLIASolver::new();
-        assert!(solver.assert(smt_formula).is_unsat());
+    pub fn solve(&self) -> QFLIASolverResult {
+        // set up a tableau
+        let _tableau: Vec<Vec<i128>> = Vec::new();
+        for goal in self.goals.iter() {
+            self.decompose_goal(goal)
+        }
+        todo!()
     }
 }
