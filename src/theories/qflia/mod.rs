@@ -27,7 +27,7 @@ impl QFLIASolverResult {
 
 pub struct QFLIASolver<T: Debug + Hash + PartialEq + Eq> {
     // QFLIA solver has constraints which are QFLIA Formulas
-    // possibly joined by conjunctions or disjunctions or other crazy stuff
+    // These are always treated as a system so they are conjunctions
     goals: Vec<QFLIAFormula<T>>,
 }
 
@@ -37,10 +37,6 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
     }
 
     pub fn assert(&mut self, goal: QFLIAFormula<T>) {
-        // Requires goal to be in bool form
-        //
-        // Letting this invariant be upheld by the SMT
-        // Solver that passes goals to the QFLIA solver
         self.goals.push(goal);
     }
 

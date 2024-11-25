@@ -3,15 +3,10 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub enum BinaryOp {
-    Add,
-    Mul,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Expr<T: Debug + Hash + PartialEq + Eq> {
     Atom(Int<T>),
-    BinExpr(Box<Expr<T>>, Box<Expr<T>>, BinaryOp),
+    Mul(Int<T>, Box<Expr<T>>),
+    Add(Box<Expr<T>>, Box<Expr<T>>),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -27,19 +22,14 @@ pub trait IntoExpr<T: Debug + Hash + PartialEq + Eq> {
 
 pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>: IntoExpr<T> + Sized {
     fn add(self, rhs: impl IntoExpr<T>) -> Expr<T> {
-        Expr::BinExpr(
-            Box::new(self.into_expr()),
-            Box::new(rhs.into_expr()),
-            BinaryOp::Add,
-        )
+        Expr::Add(Box::new(self.into_expr()), Box::new(rhs.into_expr()))
     }
 
     fn sub(self, rhs: impl IntoExpr<T>) -> Expr<T> {
         // turns x - y into x + (-y)
-        Expr::BinExpr(
+        Expr::Add(
             Box::new(self.into_expr()),
             Box::new(Int::from_const(-1).mul(rhs.into_expr())),
-            BinaryOp::Add,
         )
     }
 
@@ -120,11 +110,7 @@ impl<T: Debug + Hash + PartialEq + Eq> Int<T> {
     // Restricting mul to Int::from_const(3).mul(Int::from_var(x).add(Int::from_var(y)))
     // does this.
     pub fn mul(self, rhs: impl IntoExpr<T>) -> Expr<T> {
-        Expr::BinExpr(
-            Box::new(self.into_expr()),
-            Box::new(rhs.into_expr()),
-            BinaryOp::Mul,
-        )
+        Expr::Mul(self, Box::new(rhs.into_expr()))
     }
 }
 
