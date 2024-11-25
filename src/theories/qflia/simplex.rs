@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::formula::{BinaryOp, Expr, Int, QFLIAFormula};
+use super::formula::{Expr, Int, QFLIAFormula};
 
 #[derive(Debug)]
 pub(crate) struct LinearConstraint {
