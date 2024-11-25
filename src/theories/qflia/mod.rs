@@ -1,10 +1,12 @@
 use formula::QFLIAFormula;
+use simple_formula::{NormQFLIAFormula, QFLIAExprToSimpleCompiler};
 use simplex::Simplex;
 
 use std::fmt::Debug;
 use std::hash::Hash;
 
 pub mod formula;
+mod simple_formula;
 mod simplex;
 
 pub enum QFLIASolverResult {
@@ -26,9 +28,9 @@ impl QFLIASolverResult {
 }
 
 pub struct QFLIASolver<T: Debug + Hash + PartialEq + Eq> {
-    // QFLIA solver has constraints which are QFLIA Formulas
-    // These are always treated as a system so they are conjunctions
-    goals: Vec<QFLIAFormula<T>>,
+    // QFLIA solver has constraints which are normalized QFLIA Formulas
+    // This is always treated as a system so they are conjunctions
+    goals: Vec<NormQFLIAFormula<T>>,
 }
 
 impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
@@ -37,7 +39,9 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
     }
 
     pub fn assert(&mut self, goal: QFLIAFormula<T>) {
-        self.goals.push(goal);
+        let simp = QFLIAExprToSimpleCompiler::new();
+        let new = simp.run(goal);
+        self.goals.push(new);
     }
 
     pub fn solve(&self) -> QFLIASolverResult {
@@ -45,7 +49,6 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
         for goal in self.goals.iter() {
             simplex.parse_qflia(goal);
         }
-
         todo!()
     }
 }

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use super::formula::{Expr, Int, QFLIAFormula};
+use super::simple_formula::{NormExpr, NormQFLIAFormula};
 
 #[derive(Debug)]
 pub(crate) struct LinearConstraint {
@@ -24,31 +24,17 @@ impl<'var, T: Debug + Hash + PartialEq + Eq> Simplex<'var, T> {
         }
     }
 
-    fn parse_expr(&mut self, expr: &'var Expr<T>, coeff: Option<i128>) {
+    fn parse_expr(&mut self, expr: &'var NormExpr<T>) {
         match expr {
-            Expr::Atom(int) => match int {
-                Int::Const(_x) => {
-                    // if we get here then this is a constraint,
-                }
-                Int::Var(v) => {
-                    // insert var
-                    self.vars.insert(v);
-                }
-            },
-            Expr::Add(lhs, rhs) => {
-                self.parse_expr(lhs, coeff);
-                self.parse_expr(rhs, coeff);
-            }
-            Expr::Mul(int, rhs) => {
-                // here this is something we need to create a constraint for
-                // and we need to ensure that there's a coefficient
-                self.parse_expr(rhs, None);
-            }
+            // TODO: This has to be a variable
+            NormExpr::Const(int) => todo!(),
+            NormExpr::Var(coeff, int) => todo!(),
+            NormExpr::Add(lhs, rhs) => todo!(),
         }
     }
 
-    pub fn parse_qflia(&mut self, formula: &'var QFLIAFormula<T>) {
-        self.parse_expr(&formula.expr, None);
+    pub fn parse_qflia(&mut self, formula: &'var NormQFLIAFormula<T>) {
+        self.parse_expr(&formula.lhs);
         todo!()
     }
 }
