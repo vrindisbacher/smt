@@ -24,32 +24,31 @@ impl<'var, T: Debug + Hash + PartialEq + Eq> Simplex<'var, T> {
         }
     }
 
-    fn parse_expr(&mut self, expr: &'var Expr<T>) {
+    fn parse_expr(&mut self, expr: &'var Expr<T>, coeff: Option<i128>) {
         match expr {
             Expr::Atom(int) => match int {
                 Int::Const(_x) => {
-                    // not sure what to do
+                    // if we get here then this is a constraint,
                 }
                 Int::Var(v) => {
                     // insert var
                     self.vars.insert(v);
                 }
             },
-            Expr::BinExpr(lhs, rhs, op) => match op {
-                BinaryOp::Add => {
-                    self.parse_expr(lhs);
-                    self.parse_expr(rhs);
-                }
-                BinaryOp::Mul => {
-                    self.parse_expr(lhs);
-                    self.parse_expr(rhs);
-                }
-            },
+            Expr::Add(lhs, rhs) => {
+                self.parse_expr(lhs, coeff);
+                self.parse_expr(rhs, coeff);
+            }
+            Expr::Mul(int, rhs) => {
+                // here this is something we need to create a constraint for
+                // and we need to ensure that there's a coefficient
+                self.parse_expr(rhs, None);
+            }
         }
     }
 
-    pub fn parse_qflia(&mut self, formula: &'var QFLIAFormula<T>) -> LinearConstraint {
-        self.parse_expr(&formula.expr);
+    pub fn parse_qflia(&mut self, formula: &'var QFLIAFormula<T>) {
+        self.parse_expr(&formula.expr, None);
         todo!()
     }
 }
