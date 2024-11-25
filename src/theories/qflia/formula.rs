@@ -82,10 +82,16 @@ impl<T: Debug + Hash + PartialEq + Eq> Expr<T> {
         term_collector.into_iter().fold(
             Expr::Atom(Int::from_const(const_collapsed)),
             |acc, (term, coeff)| {
-                Expr::Add(
-                    Box::new(acc),
-                    Box::new(Expr::Mul(coeff, Box::new(Expr::Atom(Int::from_var(term))))),
-                )
+                if coeff == 0 {
+                    acc
+                } else if coeff == 1 {
+                    Expr::Add(Box::new(acc), Box::new(Expr::Atom(Int::from_var(term))))
+                } else {
+                    Expr::Add(
+                        Box::new(acc),
+                        Box::new(Expr::Mul(coeff, Box::new(Expr::Atom(Int::from_var(term))))),
+                    )
+                }
             },
         )
     }

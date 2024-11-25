@@ -263,7 +263,7 @@ impl<T: PartialEq + Eq + Hash + Debug + Clone> SATProp<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct Var<T: PartialEq + Eq + Hash + Debug + Clone> {
     name: T,
 }
