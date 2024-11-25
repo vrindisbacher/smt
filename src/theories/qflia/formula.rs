@@ -3,29 +3,22 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub(crate) enum BinaryOp {
+pub enum BinaryOp {
     Add,
     Mul,
-    Sub,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub(crate) enum Expr<T: Debug + Hash + PartialEq + Eq> {
+pub enum Expr<T: Debug + Hash + PartialEq + Eq> {
     Atom(Int<T>),
     BinExpr(Box<Expr<T>>, Box<Expr<T>>, BinaryOp),
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub(crate) enum CompOp {
-    Gte,
-    Lte,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub(crate) struct QFLIAFormula<T: Debug + Hash + PartialEq + Eq> {
-    pub lhs: Expr<T>,
-    pub rhs: Expr<T>,
-    pub op: CompOp,
+pub struct QFLIAFormula<T: Debug + Hash + PartialEq + Eq> {
+    // alway <=
+    // lhs <= rhs => lhs - rhs <= 0
+    pub expr: Expr<T>,
 }
 
 pub trait IntoExpr<T: Debug + Hash + PartialEq + Eq> {
@@ -45,26 +38,25 @@ pub trait QFLIAOp<T: Debug + Clone + Hash + PartialEq + Eq>: IntoExpr<T> + Sized
         // turns x - y into x + (-y)
         Expr::BinExpr(
             Box::new(self.into_expr()),
-            Box::new(rhs.into_expr()),
-            BinaryOp::Sub,
+            Box::new(Int::from_const(-1).mul(rhs.into_expr())),
+            BinaryOp::Add,
         )
     }
 
     fn gte(self, rhs: impl IntoExpr<T>) -> SMTFormula<QFLIAFormula<T>> {
         // normalized so that we are always comparing to 0
+        // x >= y = -x <= -y = -x + y <= 0
         SMTFormula::Atom(QFLIAFormula {
-            lhs: self.into_expr().sub(rhs.into_expr()),
-            rhs: Int::from_const(0).into_expr(),
-            op: CompOp::Gte,
+            expr: Int::from_const(-1)
+                .mul(self.into_expr())
+                .add(rhs.into_expr()),
         })
     }
 
     fn lte(self, rhs: impl IntoExpr<T>) -> SMTFormula<QFLIAFormula<T>> {
         // normalized so that we are always comparing to 0
         SMTFormula::Atom(QFLIAFormula {
-            lhs: self.into_expr().sub(rhs.into_expr()),
-            rhs: Int::from_const(0).into_expr(),
-            op: CompOp::Lte,
+            expr: self.into_expr().sub(rhs.into_expr()),
         })
     }
 
@@ -127,13 +119,13 @@ impl<T: Debug + Hash + PartialEq + Eq> Int<T> {
     //
     // Restricting mul to Int::from_const(3).mul(Int::from_var(x).add(Int::from_var(y)))
     // does this.
-    // pub fn mul(self, rhs: impl IntoQFLIAFormula<T>) -> QFLIAFormula<T> {
-    //     QFLIAFormula::BinExpr(
-    //         Box::new(self.into_qflia()),
-    //         Box::new(rhs.into_qflia()),
-    //         QFLIABinOp::Mul,
-    //     )
-    // }
+    pub fn mul(self, rhs: impl IntoExpr<T>) -> Expr<T> {
+        Expr::BinExpr(
+            Box::new(self.into_expr()),
+            Box::new(rhs.into_expr()),
+            BinaryOp::Mul,
+        )
+    }
 }
 
 impl<T: Debug + Hash + PartialEq + Eq> IntoExpr<T> for Int<T> {

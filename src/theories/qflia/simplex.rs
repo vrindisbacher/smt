@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
 
-use crate::theories::qflia::formula::QFLIABinOp;
-
-use super::formula::{QFLIAFormula, QFLIAUnOp};
+use super::formula::{BinaryOp, Expr, Int, QFLIAFormula};
 
 #[derive(Debug)]
 pub(crate) struct LinearConstraint {
@@ -26,40 +24,32 @@ impl<'var, T: Debug + Hash + PartialEq + Eq> Simplex<'var, T> {
         }
     }
 
-    fn parse_well_formed_side(&mut self, formula: &'var QFLIAFormula<T>) {
-        match formula {
-            QFLIAFormula::Atom(int) => match int {
-                super::formula::Int::Const(val) => {
-                    // a constant
+    fn parse_expr(&mut self, expr: &'var Expr<T>) {
+        match expr {
+            Expr::Atom(int) => match int {
+                Int::Const(_x) => {
+                    // not sure what to do
                 }
-                super::formula::Int::Var(var) => {
-                    // insert this into vars
-                    self.vars.insert(var);
+                Int::Var(v) => {
+                    // insert var
+                    self.vars.insert(v);
                 }
             },
-            QFLIAFormula::UnaryExpr(expr, op) => match op {
-                QFLIAUnOp::Neg => todo!(),
-            },
-            QFLIAFormula::BinExpr(lhs, rhs, op) => match op {
-                QFLIABinOp::Add => todo!(),
-                QFLIABinOp::Mul => todo!(),
-                QFLIABinOp::Gte | QFLIABinOp::Lte => {
-                    panic!("Expected this to be unreachable. The qflia formula is ill formed")
+            Expr::BinExpr(lhs, rhs, op) => match op {
+                BinaryOp::Add => {
+                    self.parse_expr(lhs);
+                    self.parse_expr(rhs);
+                }
+                BinaryOp::Mul => {
+                    self.parse_expr(lhs);
+                    self.parse_expr(rhs);
                 }
             },
         }
     }
 
-    fn from_qflia(&mut self, formula: &'var QFLIAFormula<T>) -> LinearConstraint {
-        // The QFLIA formula has to be _ <= _ or _ >= _
-        // This is upheld by the sorts of formulas that the
-        // SMT solver can take (SMTFormulas)
-        // and the types that QFLIA formula operators yield.
-        match formula {
-            QFLIAFormula::BinExpr(lhs, rhs, QFLIABinOp::Gte) => {}
-            QFLIAFormula::BinExpr(lhs, rhs, QFLIABinOp::Lte) => {}
-            _ => panic!("Expected this to be unreachable. Received invalid formula - expected _ <= _ or _ >= _"),
-        }
+    pub fn parse_qflia(&mut self, formula: &'var QFLIAFormula<T>) -> LinearConstraint {
+        self.parse_expr(&formula.expr);
         todo!()
     }
 }

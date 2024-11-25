@@ -1,4 +1,5 @@
-use formula::{QFLIAFormula, QFLIAUnOp};
+use formula::QFLIAFormula;
+use simplex::Simplex;
 
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -43,32 +44,12 @@ impl<T: Debug + Hash + PartialEq + Eq> QFLIASolver<T> {
         self.goals.push(goal);
     }
 
-    fn decompose_goal(&self, goal: &QFLIAFormula<T>) {
-        // a goal like: x + y <= 0 should be decompose into a row
-        // of a tableau like so:
-        //     x y s1 rhs
-        // s1  1 1 1  0
-        // obj 0 0 0  0
-        match goal {
-            QFLIAFormula::Atom(x) => match x {},
-            QFLIAFormula::UnaryExpr(lhs, op) => match op {
-                QFLIAUnOp::Neg => {}
-            },
-            QFLIAFormula::BinExpr(lhs, rhs, op) => match op {
-                formula::QFLIABinOp::Add => todo!(),
-                formula::QFLIABinOp::Mul => todo!(),
-                formula::QFLIABinOp::Gte => todo!(),
-                formula::QFLIABinOp::Lte => todo!(),
-            },
-        }
-    }
-
     pub fn solve(&self) -> QFLIASolverResult {
-        // set up a tableau
-        let _tableau: Vec<Vec<i128>> = Vec::new();
+        let mut simplex = Simplex::new();
         for goal in self.goals.iter() {
-            self.decompose_goal(goal)
+            simplex.parse_qflia(goal);
         }
+
         todo!()
     }
 }
